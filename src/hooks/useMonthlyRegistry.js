@@ -47,7 +47,7 @@ export const useMonthlyRegistry = () => {
   }, {});
 
   const getStudentStatus = (studentId) => {
-    return registryMap[studentId]?.status || 'pendiente';
+    return registryMap[studentId]?.status || 'pagado';
   };
 
   const isStudentBaja = (studentId) => {
@@ -140,9 +140,10 @@ export const useMonthlyRegistry = () => {
 
   const toggleBajaTemporal = async (studentId) => {
     const current = getStudentStatus(studentId);
-    const newStatus = current === 'baja_temporal' ? 'pendiente' : 'baja_temporal';
+    const newStatus = current === 'baja_temporal' ? 'pagado' : 'baja_temporal';
     return await setStudentStatus(studentId, newStatus);
   };
+
 
   return {
     registryEntries,

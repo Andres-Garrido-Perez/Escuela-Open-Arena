@@ -23,6 +23,9 @@ export const SchoolProvider = ({ children }) => {
   // Saturday visible in grid
   const [showSaturday, setShowSaturday] = useState(false);
 
+  // Profitability overlay in schedule cards
+  const [showProfitability, setShowProfitability] = useState(false);
+
   // Trigger for refreshing all queries
   const [refreshKey, setRefreshKey] = useState(0);
   const [isSeeding, setIsSeeding] = useState(false);
@@ -62,6 +65,8 @@ export const SchoolProvider = ({ children }) => {
         setActiveView,
         showSaturday,
         setShowSaturday,
+        showProfitability,
+        setShowProfitability,
         refreshKey,
         triggerRefresh,
         seedSchoolData,
@@ -71,6 +76,7 @@ export const SchoolProvider = ({ children }) => {
       {children}
     </SchoolContext.Provider>
   );
+
 };
 
 export const useSchool = () => {

@@ -3,6 +3,10 @@ import { Badge } from '../ui/Badge';
 import { EnrolledStudentRow } from './EnrolledStudentRow';
 import { QuickEnrollInput } from './QuickEnrollInput';
 import { useMonthlyRegistry } from '../../hooks/useMonthlyRegistry';
+import { useSchool } from '../../context/SchoolContext';
+import { useCoaches } from '../../hooks/useCoaches';
+import { useTariffs } from '../../hooks/useTariffs';
+import { ProfitabilitySlotBadge } from './ProfitabilitySlotBadge';
 import { Edit2, Trash2, MapPin } from 'lucide-react';
 
 export const ClassSlotCard = ({
@@ -16,6 +20,10 @@ export const ClassSlotCard = ({
   onDeleteSlot,
 }) => {
   const { isStudentBaja } = useMonthlyRegistry();
+  const { showProfitability } = useSchool();
+  const { filteredCoaches } = useCoaches();
+  const { tariffs } = useTariffs();
+
 
   // Find enrolled students objects
   const enrolledStudents = enrollments
@@ -119,54 +127,69 @@ export const ClassSlotCard = ({
         </div>
 
         {/* Notice if any student has Baja Temporal in this class */}
-        {bajasCount > 0 && (
+        {bajasCount > 0 && !showProfitability && (
           <div className="mb-2 px-1.5 py-0.5 bg-amber-50/80 border border-amber-200/80 rounded text-[10px] text-amber-800 flex items-center justify-between">
             <span>{bajasCount} {bajasCount === 1 ? 'plaza liberada por baja' : 'plazas liberadas por baja'}</span>
             <span className="font-bold text-amber-900">+Suplente</span>
           </div>
         )}
 
-        {/* Enrolled Students List */}
-        <div className="space-y-1">
-          {enrolledStudents.map(({ student, enrollmentNote, isBaja }) => (
-            <EnrolledStudentRow
-              key={student.id}
-              student={student}
-              enrollmentNote={enrollmentNote}
-              dayOfWeek={slot.day_of_week}
-              isBaja={isBaja}
-              onUnenroll={() => onUnenroll(slot.id, student.id)}
-            />
-          ))}
+        {/* Si Vista Rentabilidad está activa, sustituye la lista por ProfitabilitySlotBadge */}
+        {showProfitability ? (
+          <ProfitabilitySlotBadge
+            slot={slot}
+            enrollments={enrollments}
+            allStudents={allStudents}
+            coaches={filteredCoaches}
+            tariffs={tariffs}
+            isStudentBaja={isStudentBaja}
+          />
+        ) : (
+          <>
+            {/* Enrolled Students List */}
+            <div className="space-y-1">
+              {enrolledStudents.map(({ student, enrollmentNote, isBaja }) => (
+                <EnrolledStudentRow
+                  key={student.id}
+                  student={student}
+                  enrollmentNote={enrollmentNote}
+                  dayOfWeek={slot.day_of_week}
+                  isBaja={isBaja}
+                  onUnenroll={() => onUnenroll(slot.id, student.id)}
+                />
+              ))}
 
-          {enrolledStudents.length === 0 && (
-            <div className="py-2.5 text-center text-[11px] text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50/50">
-              Sin alumnos inscritos
+              {enrolledStudents.length === 0 && (
+                <div className="py-2.5 text-center text-[11px] text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50/50">
+                  Sin alumnos inscritos
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Quick Enroll Footer */}
-      <QuickEnrollInput
-        classSlot={slot}
-        availableStudents={allStudents}
-        alreadyEnrolledIds={enrolledStudents.map((e) => e.student.id)}
-        onEnrollExisting={(studentId, alsoAddPairDay) =>
-          onEnrollExisting({
-            classSlotId: slot.id,
-            studentId,
-            alsoAddPairDay,
-          })
-        }
-        onCreateAndEnroll={(fullName, alsoAddPairDay) =>
-          onCreateAndEnroll({
-            classSlotId: slot.id,
-            fullName,
-            alsoAddPairDay,
-          })
-        }
-      />
+            {/* Quick Enroll Footer */}
+            <QuickEnrollInput
+              classSlot={slot}
+              availableStudents={allStudents}
+              alreadyEnrolledIds={enrolledStudents.map((e) => e.student.id)}
+              onEnrollExisting={(studentId, alsoAddPairDay) =>
+                onEnrollExisting({
+                  classSlotId: slot.id,
+                  studentId,
+                  alsoAddPairDay,
+                })
+              }
+              onCreateAndEnroll={(fullName, alsoAddPairDay) =>
+                onCreateAndEnroll({
+                  classSlotId: slot.id,
+                  fullName,
+                  alsoAddPairDay,
+                })
+              }
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 };
+

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useSchool } from '../../context/SchoolContext';
 import { Button } from '../ui/Button';
+import { Switch } from '../ui/Switch';
 import {
   Calendar,
   CreditCard,
@@ -24,9 +25,12 @@ export const TopNavbar = () => {
     setSelectedMonth,
     activeView,
     setActiveView,
+    showProfitability,
+    setShowProfitability,
     seedSchoolData,
     isSeeding,
   } = useSchool();
+
 
   const [seedSuccess, setSeedSuccess] = useState(false);
 
@@ -163,7 +167,20 @@ export const TopNavbar = () => {
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
+
+          {/* Switch Vista Rentabilidad (Obligatorio) */}
+          {activeView === 'cuadrante' && (
+            <div className="flex items-center bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 shadow-xs">
+              <Switch
+                checked={showProfitability}
+                onChange={setShowProfitability}
+                label="📊 Vista Rentabilidad"
+                size="sm"
+              />
+            </div>
+          )}
         </div>
+
 
         {/* Right: Seed Button & User / Logout */}
         <div className="flex items-center gap-3">

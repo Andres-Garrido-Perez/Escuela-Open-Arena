@@ -48,11 +48,16 @@ export const SportSelectorView = ({ onSelect }) => {
             <h3 className="text-2xl font-black text-slate-900 mb-2">
               Escuela de Tenis
             </h3>
-            <p className="text-xs text-slate-600 mb-6 leading-relaxed">
+            <p className="text-xs text-slate-600 mb-4 leading-relaxed">
               Gestión de niveles iniciación, perfeccionamiento y competición con Harold, Juan y equipo.
             </p>
 
+            <div className="mb-4 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">
+              <span>📊 Cálculo de Margen Neto e IVA (21%)</span>
+            </div>
+
             <div className="grid grid-cols-3 gap-2 py-3 px-4 bg-slate-50 rounded-2xl border border-slate-100 mb-6 text-center">
+
               <div>
                 <Calendar className="w-4 h-4 text-[#0055A5] mx-auto mb-1" />
                 <span className="text-[10px] text-slate-400 uppercase font-semibold block">Cuadrante</span>
@@ -92,11 +97,16 @@ export const SportSelectorView = ({ onSelect }) => {
             <h3 className="text-2xl font-black text-slate-900 mb-2">
               Escuela de Pádel
             </h3>
-            <p className="text-xs text-slate-600 mb-6 leading-relaxed">
+            <p className="text-xs text-slate-600 mb-4 leading-relaxed">
               Organización de grupos reducidos de pádel, menores, adultos y preparación táctica.
             </p>
 
+            <div className="mb-4 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">
+              <span>📊 Cálculo de Margen Neto e IVA (21%)</span>
+            </div>
+
             <div className="grid grid-cols-3 gap-2 py-3 px-4 bg-slate-50 rounded-2xl border border-slate-100 mb-6 text-center">
+
               <div>
                 <Calendar className="w-4 h-4 text-[#0284C7] mx-auto mb-1" />
                 <span className="text-[10px] text-slate-400 uppercase font-semibold block">Cuadrante</span>

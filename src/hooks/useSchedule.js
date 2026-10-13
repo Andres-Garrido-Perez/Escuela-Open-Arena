@@ -24,7 +24,7 @@ export const useSchedule = () => {
       setLoading(true);
       setError(null);
 
-      // Query class_slots for this admin
+      // Query ALL class_slots for this admin and sport
       let slotQuery = supabase
         .from('class_slots')
         .select('*')
@@ -32,10 +32,6 @@ export const useSchedule = () => {
 
       if (sport) {
         slotQuery = slotQuery.eq('sport', sport);
-      }
-
-      if (activeCoachId && activeCoachId !== 'all') {
-        slotQuery = slotQuery.eq('coach_id', activeCoachId);
       }
 
       slotQuery = slotQuery
@@ -61,13 +57,20 @@ export const useSchedule = () => {
     } finally {
       setLoading(false);
     }
-  }, [adminId, sport, activeCoachId]);
+  }, [adminId, sport]);
 
   useEffect(() => {
     fetchSchedule();
   }, [fetchSchedule, refreshKey]);
 
+  // Filtered slots for WeeklyGrid (if a coach is selected)
+  const filteredSlots =
+    activeCoachId && activeCoachId !== 'all'
+      ? slots.filter((s) => s.coach_id === activeCoachId)
+      : slots;
+
   // Group enrollments by class_slot_id
+
   const enrollmentsBySlotId = enrollments.reduce((acc, enroll) => {
     if (!acc[enroll.class_slot_id]) {
       acc[enroll.class_slot_id] = [];
@@ -302,7 +305,8 @@ export const useSchedule = () => {
   };
 
   return {
-    slots,
+    slots: filteredSlots,
+    allSlots: slots,
     enrollments,
     enrollmentsBySlotId,
     loading,

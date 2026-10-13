@@ -119,79 +119,104 @@ export const WeeklyGrid = () => {
         </div>
       </div>
 
-      {/* Grid Columns */}
-      <div className="flex-1 p-3 lg:p-4 overflow-x-auto min-h-0">
-        <div
-          className="grid gap-3 h-full min-w-[900px]"
-          style={{
-            gridTemplateColumns: `repeat(${daysToRender.length}, minmax(260px, 1fr))`,
-          }}
-        >
-          {daysToRender.map((d) => {
-            const daySlots = slots
-              .filter((s) => Number(s.day_of_week) === d.day)
-              .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+      {/* Grid Columns Container with single scroll block */}
+      <div className="flex-1 overflow-auto min-h-0 bg-slate-100/50">
+        <div className="min-w-[900px]">
+          {/* Sticky Day Headers Row (sin hueco arriba, perfectamente pegado a la barra superior) */}
+          <div className="sticky top-0 z-20 bg-slate-100 border-b border-slate-200/90 px-3 lg:px-4 py-2.5 shadow-2xs">
+            <div
+              className="grid gap-3"
+              style={{
+                gridTemplateColumns: `repeat(${daysToRender.length}, minmax(260px, 1fr))`,
+              }}
+            >
+              {daysToRender.map((d) => {
+                const daySlotsCount = slots.filter(
+                  (s) => Number(s.day_of_week) === d.day
+                ).length;
 
-            return (
-              <div
-                key={d.day}
-                className="flex flex-col bg-slate-50/70 rounded-2xl border border-slate-200/80 p-2.5 min-h-[500px]"
-              >
-                {/* Day Header */}
-                <div className="flex items-center justify-between px-1.5 py-1 mb-2 border-b border-slate-200/70">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-slate-800 uppercase tracking-tight">
-                      {d.name}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400 bg-white px-1.5 py-0.5 rounded-full border border-slate-200">
-                      {daySlots.length}
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleOpenCreate(d.day)}
-                    className="p-1 text-slate-400 hover:text-[#0055A5] hover:bg-white rounded-lg transition-colors cursor-pointer"
-                    title={`Añadir clase el ${d.name}`}
+                return (
+                  <div
+                    key={d.day}
+                    className="flex items-center justify-between px-3 py-1.5 bg-white rounded-xl border border-slate-200/90 shadow-2xs"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Day Slots List */}
-                <div className="flex-1 space-y-2.5 overflow-y-auto pr-0.5">
-                  {daySlots.map((slot) => (
-                    <ClassSlotCard
-                      key={slot.id}
-                      slot={slot}
-                      enrollments={enrollmentsBySlotId[slot.id] || []}
-                      allStudents={filteredStudents}
-                      onEnrollExisting={enrollStudent}
-                      onCreateAndEnroll={handleCreateAndEnroll}
-                      onUnenroll={unenrollStudent}
-                      onEditSlot={handleOpenEdit}
-                      onDeleteSlot={deleteClassSlot}
-                    />
-                  ))}
-
-                  {daySlots.length === 0 && (
-                    <div className="h-40 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl text-center p-4">
-                      <p className="text-xs text-slate-400 font-medium">
-                        Sin clases programadas
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenCreate(d.day)}
-                        className="mt-2 text-xs text-[#0055A5] font-bold hover:underline cursor-pointer"
-                      >
-                        + Crear clase el {d.name}
-                      </button>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-slate-800 uppercase tracking-tight">
+                        {d.name}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full border border-slate-200 shadow-2xs">
+                        {daySlotsCount}
+                      </span>
                     </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCreate(d.day)}
+                      className="p-1 text-slate-400 hover:text-[#0055A5] hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+                      title={`Añadir clase el ${d.name}`}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Grid Columns Content */}
+          <div className="p-3 lg:p-4 pt-3 pb-8">
+            <div
+              className="grid gap-3 min-h-[500px]"
+              style={{
+                gridTemplateColumns: `repeat(${daysToRender.length}, minmax(260px, 1fr))`,
+              }}
+            >
+              {daysToRender.map((d) => {
+                const daySlots = slots
+                  .filter((s) => Number(s.day_of_week) === d.day)
+                  .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+
+                return (
+                  <div
+                    key={d.day}
+                    className="flex flex-col bg-slate-50/70 rounded-2xl border border-slate-200/80 p-2.5 min-h-[500px]"
+                  >
+                    {/* Day Slots List */}
+                    <div className="flex-1 space-y-2.5">
+                      {daySlots.map((slot) => (
+                        <ClassSlotCard
+                          key={slot.id}
+                          slot={slot}
+                          enrollments={enrollmentsBySlotId[slot.id] || []}
+                          allStudents={filteredStudents}
+                          onEnrollExisting={enrollStudent}
+                          onCreateAndEnroll={handleCreateAndEnroll}
+                          onUnenroll={unenrollStudent}
+                          onEditSlot={handleOpenEdit}
+                          onDeleteSlot={deleteClassSlot}
+                        />
+                      ))}
+
+                      {daySlots.length === 0 && (
+                        <div className="h-40 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl text-center p-4">
+                          <p className="text-xs text-slate-400 font-medium">
+                            Sin clases programadas
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCreate(d.day)}
+                            className="mt-2 text-xs text-[#0055A5] font-bold hover:underline cursor-pointer"
+                          >
+                            + Crear clase el {d.name}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
