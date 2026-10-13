@@ -1,0 +1,82 @@
+import React, { createContext, useContext, useState, useCallback } from 'react';
+import { format } from 'date-fns';
+import { supabase } from '../config/supabaseClient';
+import { useAuth } from './AuthContext';
+
+const SchoolContext = createContext(null);
+
+export const SchoolProvider = ({ children }) => {
+  const { adminId } = useAuth();
+
+  // Active Sport: 'tenis' | 'padel' (null can trigger initial selection view)
+  const [sport, setSport] = useState('tenis');
+
+  // Active Coach ID in tabs (or 'all' for overview)
+  const [activeCoachId, setActiveCoachId] = useState(null);
+
+  // Selected Month for billing and temporary leaves (format: 'YYYY-MM', e.g. '2026-10')
+  const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
+
+  // Main view tab: 'cuadrante' | 'facturacion'
+  const [activeView, setActiveView] = useState('cuadrante');
+
+  // Saturday visible in grid
+  const [showSaturday, setShowSaturday] = useState(false);
+
+  // Trigger for refreshing all queries
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [isSeeding, setIsSeeding] = useState(false);
+
+  const triggerRefresh = useCallback(() => {
+    setRefreshKey((prev) => prev + 1);
+  }, []);
+
+  const seedSchoolData = useCallback(async () => {
+    try {
+      setIsSeeding(true);
+      const { data, error } = await supabase.rpc('seed_openarena_initial_data');
+      if (error) {
+        console.error('Error executing seed_openarena_initial_data:', error);
+        throw error;
+      }
+      triggerRefresh();
+      return { success: true, data };
+    } catch (err) {
+      console.error('Seed RPC failed:', err);
+      throw err;
+    } finally {
+      setIsSeeding(false);
+    }
+  }, [triggerRefresh]);
+
+  return (
+    <SchoolContext.Provider
+      value={{
+        sport,
+        setSport,
+        activeCoachId,
+        setActiveCoachId,
+        selectedMonth,
+        setSelectedMonth,
+        activeView,
+        setActiveView,
+        showSaturday,
+        setShowSaturday,
+        refreshKey,
+        triggerRefresh,
+        seedSchoolData,
+        isSeeding,
+      }}
+    >
+      {children}
+    </SchoolContext.Provider>
+  );
+};
+
+export const useSchool = () => {
+  const context = useContext(SchoolContext);
+  if (!context) {
+    throw new Error('useSchool debe ser utilizado dentro de un SchoolProvider');
+  }
+  return context;
+};
