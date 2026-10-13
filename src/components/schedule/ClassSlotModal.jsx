@@ -25,27 +25,37 @@ export const ClassSlotModal = ({
 
   const [dayOfWeek, setDayOfWeek] = useState(1);
   const [coachId, setCoachId] = useState('');
+  const [tariffId, setTariffId] = useState('');
+  const [levelLabel, setLevelLabel] = useState('');
   const [startTime, setStartTime] = useState('16:00');
   const [endTime, setEndTime] = useState('17:00');
-  const [courtName, setCourtName] = useState('Pista 1');
-  const [levelLabel, setLevelLabel] = useState('Iniciación');
-  const [categoryName, setCategoryName] = useState('Adultos');
-  const [tariffId, setTariffId] = useState('');
+  const [courtName, setCourtName] = useState('');
   const [maxCapacity, setMaxCapacity] = useState(4);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Al elegir tarifa se autocompleta el Nivel y la Capacidad Máxima (según la hoja oficial)
+  const handleTariffChange = (id) => {
+    setTariffId(id);
+    const selected = tariffs.find((t) => String(t.id) === String(id));
+    if (selected) {
+      setLevelLabel(selected.level_label || selected.category_name || selected.code || '');
+      if (selected.max_students) {
+        setMaxCapacity(Number(selected.max_students));
+      }
+    }
+  };
+
   useEffect(() => {
     if (slotToEdit) {
       setDayOfWeek(Number(slotToEdit.day_of_week) || 1);
       setCoachId(slotToEdit.coach_id || '');
+      setTariffId(slotToEdit.tariff_id || '');
+      setLevelLabel(slotToEdit.level_label || '');
       setStartTime((slotToEdit.start_time || '16:00').slice(0, 5));
       setEndTime((slotToEdit.end_time || '17:00').slice(0, 5));
       setCourtName(slotToEdit.court_name || '');
-      setLevelLabel(slotToEdit.level_label || '');
-      setCategoryName(slotToEdit.category_name || '');
-      setTariffId(slotToEdit.tariff_id || '');
       setMaxCapacity(Number(slotToEdit.max_capacity) || 4);
       setNotes(slotToEdit.notes || '');
     } else {
@@ -57,22 +67,38 @@ export const ClassSlotModal = ({
       );
       setStartTime('16:00');
       setEndTime('17:00');
-      setCourtName('Pista 1');
-      setLevelLabel('Iniciación');
-      setCategoryName('Adultos');
-      setTariffId('');
-      setMaxCapacity(4);
+      setCourtName('');
       setNotes('');
+
+      // Preseleccionar primera tarifa oficial disponible y auto-rellenar nivel y plazas
+      if (tariffs.length > 0) {
+        const first = tariffs[0];
+        setTariffId(first.id);
+        setLevelLabel(first.level_label || first.category_name || first.code || '');
+        setMaxCapacity(Number(first.max_students) || 4);
+      } else {
+        setTariffId('');
+        setLevelLabel('Iniciación');
+        setMaxCapacity(4);
+      }
     }
     setError('');
-  }, [slotToEdit, initialDay, activeCoachId, coaches, isOpen]);
+  }, [slotToEdit, initialDay, activeCoachId, coaches, isOpen, tariffs]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!tariffId) {
+      setError('Debes seleccionar una tarifa oficial de la escuela.');
+      return;
+    }
     if (!startTime || !endTime) {
       setError('Debes especificar horario de inicio y fin.');
       return;
     }
+
+    const selectedTariff = tariffs.find((t) => String(t.id) === String(tariffId));
+    const finalLevel = levelLabel.trim() || selectedTariff?.level_label || selectedTariff?.category_name || 'General';
+    const finalCategory = selectedTariff?.category_name || selectedTariff?.level_label || finalLevel;
 
     try {
       setLoading(true);
@@ -81,12 +107,12 @@ export const ClassSlotModal = ({
         day_of_week: Number(dayOfWeek),
         coach_id: coachId || null,
         sport: sport || 'tenis',
+        tariff_id: tariffId,
+        level_label: finalLevel,
+        category_name: finalCategory,
         start_time: startTime,
         end_time: endTime,
         court_name: courtName.trim() || null,
-        level_label: levelLabel.trim() || null,
-        category_name: categoryName.trim() || null,
-        tariff_id: tariffId || null,
         max_capacity: Number(maxCapacity) || 4,
         notes: notes.trim() || null,
       });
@@ -103,12 +129,12 @@ export const ClassSlotModal = ({
       isOpen={isOpen}
       onClose={onClose}
       title={slotToEdit ? 'Editar Bloque de Clase' : 'Crear Nueva Clase'}
-      subtitle={`Configuración del horario y pista para ${sport === 'tenis' ? 'Tenis' : 'Pádel'}`}
+      subtitle={`Configuración del horario y tarifa para ${sport === 'tenis' ? 'Tenis' : 'Pádel'}`}
       maxWidth="max-w-lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl">
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium">
             {error}
           </div>
         )}
@@ -151,6 +177,48 @@ export const ClassSlotModal = ({
           </div>
         </div>
 
+        {/* Tarifa Oficial Obligatoria (Vinculada directamente a la hoja oficial de OpenArena) */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs font-bold text-slate-800">
+              Tarifa Oficial de la Escuela <span className="text-rose-500">*</span>
+            </label>
+            <span className="text-[10px] text-[#0055A5] font-semibold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+              Autocompleta Nivel y Plazas
+            </span>
+          </div>
+          <select
+            required
+            value={tariffId}
+            onChange={(e) => handleTariffChange(e.target.value)}
+            className="w-full px-3 py-2.5 text-xs md:text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:border-[#0055A5] focus:outline-none focus:ring-2 focus:ring-[#0055A5]/30 font-medium text-slate-800 cursor-pointer shadow-2xs"
+          >
+            <option value="" disabled>
+              Selecciona una tarifa oficial...
+            </option>
+            {tariffs.map((t) => (
+              <option key={t.id} value={t.id}>
+                [{t.code}] {t.category_name || t.level_label} ({t.price_non_member}€/mes · Máx {t.max_students || 4} al.)
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Nivel / Nombre de la clase (Auto-rellenado por la tarifa) */}
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1">
+            Nivel de la Clase <span className="text-[10px] font-normal text-slate-400">(Auto-asignado por tarifa)</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={levelLabel}
+            onChange={(e) => setLevelLabel(e.target.value)}
+            placeholder="Pre-Tenis, Promoción, Adultos..."
+            className="w-full px-3 py-2 text-xs md:text-sm bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0055A5]/30"
+          />
+        </div>
+
         {/* Horas Inicio y Fin */}
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -180,11 +248,11 @@ export const ClassSlotModal = ({
           </div>
         </div>
 
-        {/* Pista y Capacidad Máxima */}
+        {/* Pista y Capacidad Máxima (Plazas oficiales de la tarifa) */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Pista
+              Pista <span className="text-[10px] font-normal text-slate-400">(Opcional)</span>
             </label>
             <input
               type="text"
@@ -205,64 +273,15 @@ export const ClassSlotModal = ({
               max="20"
               value={maxCapacity}
               onChange={(e) => setMaxCapacity(e.target.value)}
-              className="w-full px-3 py-2 text-xs md:text-sm bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0055A5]/30"
+              className="w-full px-3 py-2 text-xs md:text-sm bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0055A5]/30 font-bold text-slate-800"
             />
           </div>
         </div>
 
-        {/* Nivel y Categoría */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Nivel
-            </label>
-            <input
-              type="text"
-              value={levelLabel}
-              onChange={(e) => setLevelLabel(e.target.value)}
-              placeholder="Iniciación, Competición..."
-              className="w-full px-3 py-2 text-xs md:text-sm bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0055A5]/30"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Categoría
-            </label>
-            <input
-              type="text"
-              value={categoryName}
-              onChange={(e) => setCategoryName(e.target.value)}
-              placeholder="Adultos, Menores..."
-              className="w-full px-3 py-2 text-xs md:text-sm bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0055A5]/30"
-            />
-          </div>
-        </div>
-
-        {/* Tarifa vinculada opcional */}
-        {tariffs.length > 0 && (
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Tarifa Asociada (Opcional)
-            </label>
-            <select
-              value={tariffId}
-              onChange={(e) => setTariffId(e.target.value)}
-              className="w-full px-3 py-2 text-xs md:text-sm bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0055A5]/30 cursor-pointer"
-            >
-              <option value="">Sin tarifa fija</option>
-              {tariffs.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.code} - {t.category_name} ({t.price_non_member}€/mes)
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
+        {/* Notas opcionales */}
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1">
-            Notas de la clase (Opcional)
+            Notas de la clase <span className="text-[10px] font-normal text-slate-400">(Opcional)</span>
           </label>
           <textarea
             rows="2"
@@ -273,12 +292,13 @@ export const ClassSlotModal = ({
           />
         </div>
 
+        {/* Botones de acción */}
         <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             Cancelar
           </Button>
           <Button type="submit" variant="primary" loading={loading}>
-            {slotToEdit ? 'Actualizar Clase' : 'Crear Clase'}
+            {slotToEdit ? 'Guardar Cambios' : 'Crear Clase'}
           </Button>
         </div>
       </form>

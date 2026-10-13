@@ -39,7 +39,7 @@ export const StudentCard = ({
 
             {student.is_member && (
               <Badge variant="sky" size="xs">
-                Socio
+                Abonado
               </Badge>
             )}
 

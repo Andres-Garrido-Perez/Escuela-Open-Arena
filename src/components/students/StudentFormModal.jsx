@@ -200,8 +200,8 @@ export const StudentFormModal = ({
           <Switch
             checked={isMember}
             onChange={setIsMember}
-            label="¿Es socio de OpenArena?"
-            description="Aplica precios reducidos de socio en recibos"
+            label="¿Es abonado de OpenArena?"
+            description="Aplica precios reducidos de abonado en recibos"
             size="sm"
           />
         </div>

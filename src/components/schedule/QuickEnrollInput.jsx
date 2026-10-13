@@ -19,9 +19,9 @@ export const QuickEnrollInput = ({
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Twin day double enrollment checkbox - checked by default!
+  // Twin day double enrollment checkbox - comentado a petición del cliente
   const hasTwinDay = Boolean(TWIN_DAY_LABELS[classSlot.day_of_week]);
-  const [alsoAddPairDay, setAlsoAddPairDay] = useState(true);
+  const [alsoAddPairDay, setAlsoAddPairDay] = useState(false);
 
   const wrapperRef = useRef(null);
 
@@ -96,7 +96,7 @@ export const QuickEnrollInput = ({
         </div>
       </div>
 
-      {/* Twin Day Checkbox (L+X / M+J) */}
+      {/* Opción de día gemelo (L+X / M+J) comentada por petición del usuario para despejar las tarjetas:
       {hasTwinDay && (
         <div className="mt-1 flex items-center gap-1.5 px-0.5">
           <label className="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer select-none">
@@ -112,6 +112,7 @@ export const QuickEnrollInput = ({
           </label>
         </div>
       )}
+      */}
 
       {/* Dropdown Results */}
       {isOpen && (

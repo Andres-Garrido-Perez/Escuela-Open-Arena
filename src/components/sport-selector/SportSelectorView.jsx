@@ -120,7 +120,7 @@ export const SportSelectorView = ({ onSelect }) => {
               <div>
                 <Award className="w-4 h-4 text-[#0284C7] mx-auto mb-1" />
                 <span className="text-[10px] text-slate-400 uppercase font-semibold block">Tarifas</span>
-                <span className="text-xs font-bold text-slate-700">Socios/No</span>
+                <span className="text-xs font-bold text-slate-700">Abonados/No</span>
               </div>
             </div>
 

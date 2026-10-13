@@ -98,10 +98,13 @@ export const EnrolledStudentRow = ({
           </Badge>
         )}
 
-        {/* Member Indicator */}
+        {/* Member Indicator (Abonado) */}
         {student.is_member && !isBaja && (
-          <span className="text-[9px] font-bold text-sky-600 bg-sky-50 px-1 rounded shrink-0">
-            S
+          <span
+            className="text-[9px] font-bold text-sky-600 bg-sky-50 px-1 rounded shrink-0 cursor-default"
+            title="Abonado de OpenArena"
+          >
+            Ab.
           </span>
         )}
 

@@ -605,7 +605,7 @@ export const MonthlyBillingTable = () => {
               <tr>
                 <th className="py-3 px-4">Alumno</th>
                 <th className="py-3 px-4">Teléfono</th>
-                <th className="py-3 px-4">Socio</th>
+                <th className="py-3 px-4">Abonado</th>
                 <th className="py-3 px-4">Tarifa / Plan</th>
                 <th className="py-3 px-4">Importe Mensual</th>
                 <th className="py-3 px-4">Estado del Recibo</th>
@@ -648,11 +648,11 @@ export const MonthlyBillingTable = () => {
                       {student.phone || '—'}
                     </td>
 
-                    {/* Socio */}
+                    {/* Abonado */}
                     <td className="py-3 px-4">
                       {student.is_member ? (
                         <span className="text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
-                          Socio
+                          Abonado
                         </span>
                       ) : (
                         <span className="text-[10px] text-slate-400">No</span>
