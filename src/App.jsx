@@ -5,7 +5,8 @@ import { LoginView } from './components/auth/LoginView';
 import { TopNavbar } from './components/layout/TopNavbar';
 import { MainWorkspace } from './components/layout/MainWorkspace';
 import { SportSelectorView } from './components/sport-selector/SportSelectorView';
-import { Activity } from 'lucide-react';
+
+import { BottomNavBar } from './components/layout/BottomNavBar';
 
 const AppContent = () => {
   const { session, loading } = useAuth();
@@ -14,11 +15,11 @@ const AppContent = () => {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white">
-        <div className="w-14 h-14 rounded-2xl bg-[#0055A5] flex items-center justify-center mb-4 shadow-xl animate-pulse">
-          <Activity className="w-8 h-8 text-white" />
+      <div className="min-h-screen min-h-dvh bg-slate-900 flex flex-col items-center justify-center text-white px-4">
+        <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center mb-4 shadow-xl p-3 animate-pulse">
+          <img src="/favicon.png" alt="OpenArena" className="w-10 h-10 object-contain" />
         </div>
-        <p className="text-sm font-bold tracking-widest uppercase text-sky-300">
+        <p className="text-sm font-bold tracking-widest uppercase text-sky-300 text-center">
           Cargando OpenArena...
         </p>
       </div>
@@ -37,9 +38,10 @@ const AppContent = () => {
 
   // Authenticated App Workspace
   return (
-    <div className="min-h-screen h-screen flex flex-col bg-[#F8FAFC] text-[#0F172A] overflow-hidden">
+    <div className="min-h-screen min-h-dvh h-screen h-dvh flex flex-col bg-[#F8FAFC] text-[#0F172A] overflow-hidden">
       <TopNavbar />
       <MainWorkspace />
+      <BottomNavBar />
     </div>
   );
 };

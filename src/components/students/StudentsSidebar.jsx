@@ -60,9 +60,9 @@ export const StudentsSidebar = () => {
   }, {});
 
   return (
-    <aside className="w-full md:w-[320px] lg:w-[360px] xl:w-[400px] bg-white border-l border-slate-200 flex flex-col h-full shadow-xs shrink-0">
+    <aside className="w-full md:w-[320px] lg:w-[360px] xl:w-[400px] bg-white border-l-0 md:border-l border-slate-200 flex flex-col h-full shadow-xs shrink-0">
       {/* Header */}
-      <div className="p-4 border-b border-slate-200">
+      <div className="p-3 sm:p-4 border-b border-slate-200">
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-[#0055A5]" />

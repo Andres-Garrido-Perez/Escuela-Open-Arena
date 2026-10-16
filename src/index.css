@@ -7,6 +7,7 @@
     --openarena-accent: #38BDF8;
   }
 
+  html,
   body {
     background-color: #F8FAFC;
     color: #0F172A;
@@ -14,16 +15,27 @@
     margin: 0;
     padding: 0;
     min-height: 100vh;
+    min-height: 100dvh;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
   }
 
   * {
     box-sizing: border-box;
   }
+
+  /* Prevent automatic iOS zoom when focusing inputs while retaining compact desktop typography */
+  @media screen and (max-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
 }
 
-/* Custom scrollbars for dense grid view */
+/* Custom scrollbars for dense desktop grid view */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -37,4 +49,21 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94A3B8;
+}
+
+/* Utility to hide scrollbars cleanly on mobile tabs & pills while remaining horizontally scrollable */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Safe area support for iOS home indicators */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
 }

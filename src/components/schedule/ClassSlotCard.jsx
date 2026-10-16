@@ -85,22 +85,22 @@ export const ClassSlotCard = ({
           </div>
 
           {/* Action buttons (Edit / Delete) */}
-          <div className="flex items-center gap-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
+          <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity">
             <button
               type="button"
               onClick={() => onEditSlot(slot)}
-              className="p-1 text-slate-400 hover:text-[#0055A5] hover:bg-slate-100 rounded cursor-pointer transition-colors"
+              className="p-1.5 text-slate-400 hover:text-[#0055A5] hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
               title="Editar clase"
             >
-              <Edit2 className="w-3 h-3" />
+              <Edit2 className="w-3.5 h-3.5" />
             </button>
             <button
               type="button"
               onClick={() => onDeleteSlot(slot.id)}
-              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer transition-colors"
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
               title="Eliminar clase"
             >
-              <Trash2 className="w-3 h-3" />
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

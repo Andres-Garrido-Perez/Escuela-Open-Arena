@@ -30,7 +30,7 @@ export const Modal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
@@ -38,16 +38,19 @@ export const Modal = ({
         aria-hidden="true"
       />
 
-      {/* Dialog container */}
+      {/* Dialog container: bottom-sheet on mobile, centered modal on desktop */}
       <div
-        className={`relative w-full ${maxWidth} bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden transform transition-all z-10 my-8`}
+        className={`relative w-full ${maxWidth} bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-100 overflow-hidden transform transition-all z-10 max-h-[92dvh] sm:max-h-[85vh] flex flex-col my-0 sm:my-8`}
         role="dialog"
         aria-modal="true"
       >
+        {/* Mobile handle indicator */}
+        <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mt-2.5 sm:hidden shrink-0" />
+
         {/* Header */}
-        <div className="flex items-start justify-between p-5 border-b border-slate-100 bg-slate-50/50">
+        <div className="flex items-start justify-between p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 shrink-0">
           <div>
-            <h3 className="text-lg font-bold text-slate-900 tracking-tight">
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
               {title}
             </h3>
             {subtitle && (
@@ -57,15 +60,15 @@ export const Modal = ({
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-lg transition-colors cursor-pointer"
+            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 sm:p-1.5 rounded-xl transition-colors cursor-pointer"
             aria-label="Cerrar modal"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-5 max-h-[80vh] overflow-y-auto">{children}</div>
+        {/* Content with dynamic scroll */}
+        <div className="p-4 sm:p-5 overflow-y-auto">{children}</div>
       </div>
     </div>
   );

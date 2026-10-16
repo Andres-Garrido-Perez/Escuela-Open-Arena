@@ -67,11 +67,11 @@ export const StudentCard = ({
         </div>
 
         {/* Action icons */}
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
           <button
             type="button"
             onClick={() => onEdit(student)}
-            className="p-1 text-slate-400 hover:text-[#0055A5] hover:bg-slate-100 rounded cursor-pointer"
+            className="p-1.5 text-slate-400 hover:text-[#0055A5] hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
             title="Editar alumno"
           >
             <Edit2 className="w-3.5 h-3.5" />
@@ -79,7 +79,7 @@ export const StudentCard = ({
           <button
             type="button"
             onClick={() => onDelete(student.id)}
-            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
+            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
             title="Eliminar alumno"
           >
             <Trash2 className="w-3.5 h-3.5" />

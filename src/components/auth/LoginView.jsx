@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../ui/Button';
-import { Shield, Mail, Lock, ArrowRight, Activity } from 'lucide-react';
+import { Shield, Mail, Lock, ArrowRight } from 'lucide-react';
 
 export const LoginView = () => {
   const { signIn } = useAuth();
@@ -34,24 +34,22 @@ export const LoginView = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-[#003870] to-[#0055A5] flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100">
+    <div className="min-h-screen min-h-dvh bg-gradient-to-br from-slate-900 via-[#003870] to-[#0055A5] flex items-center justify-center p-3 sm:p-4 relative overflow-y-auto py-6">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 my-auto">
         {/* Header Branding */}
-        <div className="bg-gradient-to-r from-[#0055A5] to-[#0284C7] p-8 text-white text-center relative overflow-hidden">
+        <div className="bg-gradient-to-r from-[#0055A5] to-[#0284C7] p-6 sm:p-8 text-white text-center relative overflow-hidden">
           <div className="absolute -top-12 -right-12 w-36 h-36 bg-white/10 rounded-full blur-2xl pointer-events-none" />
           <div className="absolute -bottom-8 -left-8 w-28 h-28 bg-[#38BDF8]/20 rounded-full blur-xl pointer-events-none" />
 
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-md border border-white/20 mb-3 shadow-inner">
-            <Activity className="w-8 h-8 text-white animate-pulse" />
+          {/* Logo donde pone en texto open arena */}
+          <div className="inline-flex items-center justify-center p-2.5 sm:p-3 rounded-2xl bg-white shadow-xl mb-2 sm:mb-3 border border-white/30">
+            <img src="/logoOpenArena.png" alt="OpenArena" className="h-12 sm:h-16 w-auto object-contain" />
           </div>
 
-          <h1 className="text-2xl font-black tracking-tight text-white m-0">
-            OPENARENA
-          </h1>
-          <p className="text-sky-100 text-xs font-medium uppercase tracking-widest mt-1">
+          <p className="text-sky-100 text-xs font-semibold uppercase tracking-widest mt-1">
             Gestión de Escuelas Deportivas
           </p>
-          <div className="flex items-center justify-center gap-2 mt-3">
+          <div className="flex items-center justify-center gap-2 mt-2 sm:mt-3">
             <span className="text-[11px] bg-white/20 px-2.5 py-0.5 rounded-full font-semibold">
               🎾 Tenis
             </span>
@@ -62,9 +60,9 @@ export const LoginView = () => {
         </div>
 
         {/* Form Body */}
-        <div className="p-8">
-          <div className="mb-6 text-center">
-            <h2 className="text-lg font-bold text-slate-800 m-0">
+        <div className="p-5 sm:p-8">
+          <div className="mb-5 sm:mb-6 text-center">
+            <h2 className="text-base sm:text-lg font-bold text-slate-800 m-0">
               Acceso de Administrador
             </h2>
             <p className="text-xs text-slate-500 mt-1">

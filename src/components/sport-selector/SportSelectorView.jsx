@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSchool } from '../../context/SchoolContext';
-import { Activity, ArrowRight, Users, Calendar, Award } from 'lucide-react';
+import { ArrowRight, Users, Calendar, Award } from 'lucide-react';
 
 export const SportSelectorView = ({ onSelect }) => {
   const { setSport } = useSchool();
@@ -11,41 +11,48 @@ export const SportSelectorView = ({ onSelect }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Decorative Glows */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#0055A5]/30 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#38BDF8]/20 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen min-h-dvh bg-slate-900 flex items-center justify-center p-3 sm:p-6 py-6 sm:py-8 relative overflow-y-auto">
+      {/* Corner Logo (Visible on sm+) */}
+      <div className="hidden sm:flex absolute top-4 left-4 sm:top-6 sm:left-6 z-20 items-center bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl shadow-xl border border-white/30 hover:scale-105 transition-transform duration-200">
+        <img
+          src="/logoOpenArena.png"
+          alt="OpenArena Logo"
+          className="h-9 sm:h-10 w-auto object-contain"
+        />
+      </div>
 
-      <div className="max-w-4xl w-full relative z-10 text-center">
+      {/* Decorative Glows */}
+      <div className="absolute top-1/4 left-1/4 w-72 sm:w-96 h-72 sm:h-96 bg-[#0055A5]/30 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-72 sm:w-96 h-72 sm:h-96 bg-[#38BDF8]/20 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="max-w-4xl w-full relative z-10 text-center my-auto">
         {/* Header */}
-        <div className="mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 mb-4 shadow-xl">
-            <Activity className="w-8 h-8 text-[#38BDF8]" />
+        <div className="mb-6 sm:mb-10 flex flex-col items-center">
+          {/* Central Logo */}
+          <div className="inline-flex items-center justify-center p-3 sm:p-3.5 rounded-3xl bg-white shadow-2xl mb-3 sm:mb-4 border border-white/20">
+            <img src="/logoOpenArena.png" alt="OpenArena" className="h-12 sm:h-16 w-auto object-contain" />
           </div>
-          <h1 className="text-4xl font-black text-white tracking-tight mb-2">
-            OPEN<span className="text-[#38BDF8]">ARENA</span>
-          </h1>
-          <p className="text-slate-300 text-sm max-w-md mx-auto">
+          <p className="text-slate-300 text-xs sm:text-sm max-w-md mx-auto px-2">
             Plataforma Integral de Gestión de Escuelas Deportivas. Selecciona el deporte a gestionar:
           </p>
         </div>
 
         {/* Sports Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 max-w-3xl mx-auto">
           {/* Card Tenis */}
           <div
             onClick={() => handleChoose('tenis')}
-            className="group relative bg-white/95 backdrop-blur-sm rounded-3xl p-8 text-left border border-white/20 shadow-2xl hover:scale-[1.02] hover:shadow-[#0055A5]/40 transition-all duration-300 cursor-pointer overflow-hidden"
+            className="group relative bg-white/95 backdrop-blur-sm rounded-3xl p-5 sm:p-8 text-left border border-white/20 shadow-2xl hover:scale-[1.01] sm:hover:scale-[1.02] hover:shadow-[#0055A5]/40 transition-all duration-300 cursor-pointer overflow-hidden"
           >
             <div className="absolute top-0 right-0 w-32 h-32 bg-amber-400/10 rounded-full blur-2xl group-hover:bg-amber-400/20 transition-all" />
-            <div className="flex items-center justify-between mb-6">
-              <span className="text-5xl">🎾</span>
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <span className="text-4xl sm:text-5xl">🎾</span>
               <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 bg-amber-100 text-amber-800 rounded-full">
                 Tierra & Resina
               </span>
             </div>
 
-            <h3 className="text-2xl font-black text-slate-900 mb-2">
+            <h3 className="text-xl sm:text-2xl font-black text-slate-900 mb-1.5 sm:mb-2">
               Escuela de Tenis
             </h3>
             <p className="text-xs text-slate-600 mb-4 leading-relaxed">
