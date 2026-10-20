@@ -304,6 +304,93 @@ export const useSchedule = () => {
     }
   };
 
+  // Auto-assign student to schedule based on coach, days and time
+  const autoAssignStudentToSchedule = async ({
+    studentId,
+    coachId,
+    daysOfWeek = [],
+    startTime,
+    endTime,
+    tariffId,
+    levelLabel,
+    sport: targetSport,
+    maxCapacity = 4,
+  }) => {
+    if (!studentId || !Array.isArray(daysOfWeek) || daysOfWeek.length === 0 || !startTime) {
+      return { assigned: 0 };
+    }
+
+    const currentSport = targetSport || sport || 'tenis';
+    const cleanStartTime = startTime.slice(0, 5);
+
+    // Calculate default endTime if not provided (+1h)
+    let cleanEndTime = endTime ? endTime.slice(0, 5) : '';
+    if (!cleanEndTime) {
+      const [sh = 16, sm = 0] = cleanStartTime.split(':').map(Number);
+      const endHour = (sh + 1).toString().padStart(2, '0');
+      const endMin = sm.toString().padStart(2, '0');
+      cleanEndTime = `${endHour}:${endMin}`;
+    }
+
+    let assignedCount = 0;
+    const createdSlotIds = [];
+
+    for (const day of daysOfWeek) {
+      const dayNum = Number(day);
+      if (isNaN(dayNum) || dayNum < 1 || dayNum > 6) continue;
+
+      // Find matching slot across allSlots/slots
+      const existingSlots = slots.length > 0 ? slots : [];
+      let targetSlot = existingSlots.find((s) => {
+        const matchesDay = Number(s.day_of_week) === dayNum;
+        const matchesTime = (s.start_time || '').slice(0, 5) === cleanStartTime;
+        const matchesSport = !s.sport || s.sport === currentSport;
+        const matchesCoach = coachId ? s.coach_id === coachId : true;
+        return matchesDay && matchesTime && matchesSport && matchesCoach;
+      });
+
+      // If slot doesn't exist, create it on the fly!
+      if (!targetSlot) {
+        try {
+          targetSlot = await addClassSlot({
+            coach_id: coachId || null,
+            sport: currentSport,
+            day_of_week: dayNum,
+            start_time: cleanStartTime,
+            end_time: cleanEndTime,
+            level_label: levelLabel || 'General',
+            category_name: levelLabel || 'General',
+            tariff_id: tariffId || null,
+            max_capacity: Number(maxCapacity) || 4,
+            court_name: null,
+          });
+          if (targetSlot?.id) {
+            createdSlotIds.push(targetSlot.id);
+          }
+        } catch (slotCreateErr) {
+          console.error(`Error auto-creando clase para día ${dayNum}:`, slotCreateErr);
+        }
+      }
+
+      // Enroll student in the target slot
+      if (targetSlot?.id) {
+        try {
+          await enrollStudent({
+            classSlotId: targetSlot.id,
+            studentId,
+            enrollmentNote: null,
+            alsoAddPairDay: false,
+          });
+          assignedCount += 1;
+        } catch (enrollErr) {
+          console.error(`Error inscribiendo en clase ${targetSlot.id}:`, enrollErr);
+        }
+      }
+    }
+
+    return { assigned: assignedCount, createdSlotIds };
+  };
+
   return {
     slots: filteredSlots,
     allSlots: slots,
@@ -316,6 +403,7 @@ export const useSchedule = () => {
     deleteClassSlot,
     enrollStudent,
     unenrollStudent,
+    autoAssignStudentToSchedule,
     getTwinDay,
     refreshSchedule: fetchSchedule,
   };

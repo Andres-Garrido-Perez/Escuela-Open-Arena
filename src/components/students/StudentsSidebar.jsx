@@ -31,9 +31,9 @@ export const StudentsSidebar = () => {
 
   const handleSaveStudent = async (studentData) => {
     if (studentToEdit) {
-      await updateStudent(studentToEdit.id, studentData);
+      return await updateStudent(studentToEdit.id, studentData);
     } else {
-      await addStudent(studentData);
+      return await addStudent(studentData);
     }
   };
 

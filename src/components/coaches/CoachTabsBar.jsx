@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { useCoaches } from '../../hooks/useCoaches';
 import { CoachFormModal } from './CoachFormModal';
+import { CoachSalaryModal } from './CoachSalaryModal';
 import { Button } from '../ui/Button';
-import { Plus, Edit2, Users } from 'lucide-react';
+import { Plus, Edit2, Users, Euro } from 'lucide-react';
 
 export const CoachTabsBar = () => {
   const { activeCoachId, setActiveCoachId, sport } = useSchool();
@@ -11,6 +12,8 @@ export const CoachTabsBar = () => {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [coachToEdit, setCoachToEdit] = useState(null);
+  const [salaryModalOpen, setSalaryModalOpen] = useState(false);
+  const [coachForSalary, setCoachForSalary] = useState(null);
 
   const handleOpenCreate = () => {
     setCoachToEdit(null);
@@ -21,6 +24,16 @@ export const CoachTabsBar = () => {
     e.stopPropagation();
     setCoachToEdit(coach);
     setModalOpen(true);
+  };
+
+  const handleOpenSalary = (coach, e) => {
+    e.stopPropagation();
+    setCoachForSalary(coach);
+    setSalaryModalOpen(true);
+  };
+
+  const handleSaveSalary = async (coachId, hourlyCost) => {
+    await updateCoach(coachId, { hourly_cost: hourlyCost });
   };
 
   const handleSaveCoach = async (coachData) => {
@@ -61,6 +74,7 @@ export const CoachTabsBar = () => {
         {filteredCoaches.map((coach) => {
           const isSelected = activeCoachId === coach.id;
           const colorDot = coach.color_theme || '#0055A5';
+          const hasSalary = coach.hourly_cost !== null && coach.hourly_cost !== undefined;
 
           return (
             <div
@@ -79,6 +93,23 @@ export const CoachTabsBar = () => {
               />
               <span className="whitespace-nowrap">{coach.name}</span>
 
+              {/* Sueldo / Coste por hora badge button */}
+              <button
+                type="button"
+                onClick={(e) => handleOpenSalary(coach, e)}
+                title={`Coste: ${hasSalary ? `${Number(coach.hourly_cost).toFixed(2)}€/h` : 'Sin asignar'}. Haz clic para editar sueldo.`}
+                className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer inline-flex items-center gap-0.5 ${
+                  isSelected
+                    ? 'bg-white/20 text-white hover:bg-white/30 hover:scale-105'
+                    : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 border border-slate-200/80 hover:scale-105'
+                }`}
+              >
+                <Euro className="w-2.5 h-2.5" />
+                <span>
+                  {hasSalary ? `${Number(coach.hourly_cost).toFixed(2)}€/h` : 'Sueldo'}
+                </span>
+              </button>
+
               {/* Edit button */}
               <button
                 type="button"
@@ -88,7 +119,7 @@ export const CoachTabsBar = () => {
                     ? 'opacity-90 hover:opacity-100 text-white'
                     : 'opacity-50 hover:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-slate-400 hover:text-slate-800'
                 }`}
-                title="Editar monitor"
+                title="Editar monitor completo"
               >
                 <Edit2 className="w-3 h-3" />
               </button>
@@ -117,12 +148,20 @@ export const CoachTabsBar = () => {
         </Button>
       </div>
 
-      {/* Modal */}
+      {/* Modal Edición Completa Monitor */}
       <CoachFormModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         coachToEdit={coachToEdit}
         onSave={handleSaveCoach}
+      />
+
+      {/* Modal Rápido Sueldo / Coste por hora */}
+      <CoachSalaryModal
+        isOpen={salaryModalOpen}
+        onClose={() => setSalaryModalOpen(false)}
+        coach={coachForSalary}
+        onSaveSalary={handleSaveSalary}
       />
     </div>
   );

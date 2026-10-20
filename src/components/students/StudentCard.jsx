@@ -14,6 +14,7 @@ export const StudentCard = ({
   const { isStudentBaja, toggleBajaTemporal } = useMonthlyRegistry();
 
   const isBaja = isStudentBaja(student.id);
+  const isPrueba = student.status === 'pendiente_aprobacion' || student.status === 'confirmado_prueba';
 
   const cleanPhone = student.phone ? student.phone.replace(/[^0-9]/g, '') : '';
 
@@ -22,6 +23,8 @@ export const StudentCard = ({
       className={`group p-3 rounded-xl border transition-all text-xs bg-white ${
         isBaja
           ? 'border-slate-300 bg-slate-50/80 text-slate-500'
+          : isPrueba
+          ? 'border-amber-300/80 bg-amber-50/20 hover:border-amber-400 hover:shadow-xs'
           : 'border-slate-200/90 hover:border-slate-300 hover:shadow-xs'
       }`}
     >
@@ -31,11 +34,21 @@ export const StudentCard = ({
           <div className="flex items-center gap-1.5 flex-wrap">
             <span
               className={`font-black truncate text-sm tracking-tight ${
-                isBaja ? 'text-slate-500 line-through' : 'text-slate-900'
+                isBaja
+                  ? 'text-slate-500 line-through'
+                  : isPrueba
+                  ? 'text-amber-600'
+                  : 'text-slate-900'
               }`}
             >
               {student.full_name}
             </span>
+
+            {isPrueba && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-500 text-white shadow-xs">
+                Prueba
+              </span>
+            )}
 
             {student.is_member && (
               <Badge variant="sky" size="xs">

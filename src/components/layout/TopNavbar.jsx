@@ -139,7 +139,7 @@ export const TopNavbar = () => {
               }`}
             >
               <CreditCard className="w-3.5 h-3.5" />
-              <span>Facturación & Bajas</span>
+              <span>Facturación & Alumnos</span>
             </button>
           </div>
 

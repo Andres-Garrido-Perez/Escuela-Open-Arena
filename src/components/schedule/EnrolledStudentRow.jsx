@@ -1,6 +1,6 @@
 import React from 'react';
 import { Badge } from '../ui/Badge';
-import { X, AlertTriangle, Phone } from 'lucide-react';
+import { X, AlertTriangle, Phone, Sparkles } from 'lucide-react';
 
 const DAY_NAMES = {
   1: 'lunes',
@@ -19,6 +19,10 @@ export const EnrolledStudentRow = ({
   onUnenroll,
 }) => {
   if (!student) return null;
+
+  const isPrueba =
+    student.status === 'pendiente_aprobacion' ||
+    student.status === 'confirmado_prueba';
 
   // Restriction validation
   const dayName = DAY_NAMES[dayOfWeek] || '';
@@ -59,20 +63,37 @@ export const EnrolledStudentRow = ({
       className={`group flex items-center justify-between py-1.5 px-2 rounded-lg transition-colors text-xs border ${
         isBaja
           ? 'bg-slate-100/90 border-slate-200 text-slate-400'
+          : isPrueba
+          ? 'bg-amber-50/50 hover:bg-amber-50/80 border-amber-300/80 text-amber-950 shadow-2xs'
           : 'bg-white hover:bg-slate-50 border-slate-150 text-slate-800'
       }`}
     >
       {/* Student Details */}
       <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-1">
-        {/* Full Name & Strikethrough if Baja */}
+        {/* Full Name & Strikethrough if Baja / Orange if Prueba */}
         <span
-          className={`font-semibold truncate ${
-            isBaja ? 'line-through text-slate-400 italic' : 'text-slate-800'
+          className={`truncate ${
+            isBaja
+              ? 'line-through text-slate-400 italic font-medium'
+              : isPrueba
+              ? 'text-amber-600 font-bold'
+              : 'text-slate-800 font-semibold'
           }`}
-          title={student.full_name}
+          title={`${student.full_name}${isPrueba ? ' (Alumno en clase de prueba)' : ''}`}
         >
           {student.full_name}
         </span>
+
+        {/* Badge "Prueba" (Vital para el monitor) */}
+        {isPrueba && !isBaja && (
+          <span
+            className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded-full shrink-0 shadow-2xs"
+            title="Alumno en prueba (Pendiente de Aprobación)"
+          >
+            <Sparkles className="w-2.5 h-2.5 text-amber-600" />
+            Prueba
+          </span>
+        )}
 
         {/* Baja Temporal Tag */}
         {isBaja && (
@@ -108,8 +129,8 @@ export const EnrolledStudentRow = ({
           </span>
         )}
 
-        {/* Enrollment Note if present */}
-        {enrollmentNote && (
+        {/* Enrollment Note if present (ignoring auto-asignado) */}
+        {enrollmentNote && !enrollmentNote.toLowerCase().includes('auto-asignado') && (
           <span className="text-[10px] text-slate-400 truncate hidden md:inline shrink-0" title={enrollmentNote}>
             • {enrollmentNote}
           </span>

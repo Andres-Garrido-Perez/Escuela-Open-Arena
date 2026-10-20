@@ -5,6 +5,11 @@ import { useTariffs } from '../../hooks/useTariffs';
 import { useCoaches } from '../../hooks/useCoaches';
 import { useSchedule } from '../../hooks/useSchedule';
 import { useMonthlyRegistry } from '../../hooks/useMonthlyRegistry';
+import { useMonthlyClosures } from '../../hooks/useMonthlyClosures';
+import { MonthlyClosuresHistory } from './MonthlyClosuresHistory';
+import { CloseMonthModal } from './CloseMonthModal';
+import { CoachSalaryModal } from '../coaches/CoachSalaryModal';
+import { StudentFormModal } from '../students/StudentFormModal';
 import { Badge } from '../ui/Badge';
 import { SearchInput } from '../ui/SearchInput';
 import {
@@ -17,21 +22,45 @@ import {
   ChevronDown,
   ChevronUp,
   Phone,
+  Lock,
+  Edit2,
+  History,
 } from 'lucide-react';
 import { format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 export const MonthlyBillingTable = () => {
   const { selectedMonth, sport } = useSchool();
-  const { filteredStudents } = useStudents();
+  const { filteredStudents, updateStudent } = useStudents();
   const { tariffs } = useTariffs();
-  const { filteredCoaches } = useCoaches();
+  const { filteredCoaches, updateCoach } = useCoaches();
   const { allSlots, slots, enrollments } = useSchedule();
   const { registryMap, setStudentStatus } = useMonthlyRegistry();
+  const { isMonthClosed, closeMonth } = useMonthlyClosures();
+
+  const isClosed = isMonthClosed(selectedMonth);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('todos');
   const [showCoachesBreakdown, setShowCoachesBreakdown] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
+  const [closeModalOpen, setCloseModalOpen] = useState(false);
+  const [salaryModalOpen, setSalaryModalOpen] = useState(false);
+  const [coachForSalary, setCoachForSalary] = useState(null);
+  const [studentToEdit, setStudentToEdit] = useState(null);
+
+  const handleOpenSalary = (coach) => {
+    setCoachForSalary(coach);
+    setSalaryModalOpen(true);
+  };
+
+  const handleSaveSalary = async (coachId, hourlyCost) => {
+    await updateCoach(coachId, { hourly_cost: hourlyCost });
+  };
+
+  const handleConfirmCloseMonth = async () => {
+    await closeMonth(selectedMonth, coachesBreakdown);
+  };
 
   // Month title formatted
   const formattedMonth = useMemo(() => {
@@ -232,7 +261,8 @@ export const MonthlyBillingTable = () => {
       (student.phone && student.phone.includes(query));
 
     if (!matchesSearch) return false;
-    if (statusFilter !== 'todos' && status !== statusFilter) return false;
+    if (statusFilter === 'activos' && status === 'baja_temporal') return false;
+    if (statusFilter === 'bajas' && status !== 'baja_temporal') return false;
 
     return true;
   });
@@ -241,7 +271,7 @@ export const MonthlyBillingTable = () => {
     try {
       await setStudentStatus(studentId, newStatus, currentPrice);
     } catch (err) {
-      alert('Error actualizando estado del recibo: ' + err.message);
+      alert('Error actualizando estado del alumno: ' + err.message);
     }
   };
 
@@ -252,31 +282,65 @@ export const MonthlyBillingTable = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight capitalize m-0">
-              Control de Facturación & Rentabilidad — {formattedMonth}
+              Facturación & Alumnos — {formattedMonth}
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Estado de cobros (por defecto pagados) y desglose de costes por
-              monitor en escuela de {sport === 'tenis' ? 'Tenis' : 'Pádel'}.
+              Gestión de alumnos, control de bajas temporales y cálculo de rentabilidad en escuela de {sport === 'tenis' ? 'Tenis' : 'Pádel'}.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowCoachesBreakdown(!showCoachesBreakdown)}
-            className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer"
-          >
-            <Briefcase className="w-3.5 h-3.5 text-[#0055A5]" />
-            <span>
-              {showCoachesBreakdown
-                ? 'Ocultar Rentabilidad'
-                : 'Ver Rentabilidad'}
-            </span>
-            {showCoachesBreakdown ? (
-              <ChevronUp className="w-3.5 h-3.5" />
-            ) : (
-              <ChevronDown className="w-3.5 h-3.5" />
-            )}
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            {/* Botón Cerrar Mes */}
+            <button
+              type="button"
+              onClick={() => setCloseModalOpen(true)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                isClosed
+                  ? 'bg-slate-900 text-white hover:bg-slate-800'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>
+                {isClosed
+                  ? '🔒 Mes Cerrado (Actualizar)'
+                  : '🔒 Cerrar Mes y Guardar Histórico'}
+              </span>
+            </button>
+
+            {/* Toggle Histórico de Beneficios */}
+            <button
+              type="button"
+              onClick={() => setShowHistory(!showHistory)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all shadow-xs cursor-pointer ${
+                showHistory
+                  ? 'bg-slate-800 text-white border-slate-800'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <History className="w-3.5 h-3.5 text-[#0055A5]" />
+              <span>{showHistory ? 'Ocultar Histórico' : 'Histórico Beneficios'}</span>
+            </button>
+
+            {/* Toggle Rentabilidad */}
+            <button
+              type="button"
+              onClick={() => setShowCoachesBreakdown(!showCoachesBreakdown)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer"
+            >
+              <Briefcase className="w-3.5 h-3.5 text-[#0055A5]" />
+              <span>
+                {showCoachesBreakdown
+                  ? 'Ocultar Rentabilidad'
+                  : 'Ver Rentabilidad'}
+              </span>
+              {showCoachesBreakdown ? (
+                <ChevronUp className="w-3.5 h-3.5" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Global Summary Cards: 2 cols on mobile, 5 on desktop */}
@@ -485,11 +549,17 @@ export const MonthlyBillingTable = () => {
 
                       {/* 3. Coste monitor */}
                       <div className="flex items-center justify-between">
-                        <span className="text-slate-600 font-medium">
+                        <span className="text-slate-600 font-medium flex items-center gap-1">
                           Coste monitor{' '}
-                          <span className="text-[10px] text-slate-400">
-                            ({weeklyHours}h/sem × 4s × {hourlyRate}€/h)
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSalary(coach)}
+                            className="inline-flex items-center gap-0.5 text-[10px] text-[#0055A5] hover:underline font-bold cursor-pointer"
+                            title="Haz clic para editar el sueldo / coste por hora de este monitor"
+                          >
+                            <span>({weeklyHours}h/sem × 4s × {hourlyRate}€/h)</span>
+                            <Edit2 className="w-2.5 h-2.5 ml-0.5" />
+                          </button>
                           :
                         </span>
                         <span className="font-bold text-slate-700">
@@ -518,14 +588,17 @@ export const MonthlyBillingTable = () => {
                   </div>
 
                   {hourlyRate === 0 && (
-                    <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded mt-2 block text-center">
-                      ℹ️ Añade su coste/hora en la pestaña de monitor para calcular nómina exacta.
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSalary(coach)}
+                      className="text-[10px] text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 px-2 py-1 rounded-lg mt-2 block w-full text-center font-bold cursor-pointer transition-colors"
+                    >
+                      ✏️ Asignar sueldo/hora a {coach.name} para calcular nómina
+                    </button>
                   )}
                 </div>
               );
             })}
-
 
             {coachesBreakdown.length === 0 && (
               <div className="col-span-full py-8 text-center text-slate-400 text-xs">
@@ -534,6 +607,11 @@ export const MonthlyBillingTable = () => {
             )}
           </div>
         </div>
+      )}
+
+      {/* HISTÓRICO DE BENEFICIOS */}
+      {showHistory && (
+        <MonthlyClosuresHistory />
       )}
 
       {/* TABLE CONTAINER: ALUMNOS BILLING TABLE */}
@@ -563,31 +641,20 @@ export const MonthlyBillingTable = () => {
             </button>
             <button
               type="button"
-              onClick={() => setStatusFilter('pagado')}
+              onClick={() => setStatusFilter('activos')}
               className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-                statusFilter === 'pagado'
+                statusFilter === 'activos'
                   ? 'bg-white text-emerald-700 shadow-xs'
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              Pagados ({rows.filter((r) => r.status === 'pagado').length})
+              Activos ({rows.filter((r) => r.status !== 'baja_temporal').length})
             </button>
             <button
               type="button"
-              onClick={() => setStatusFilter('pendiente')}
+              onClick={() => setStatusFilter('bajas')}
               className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-                statusFilter === 'pendiente'
-                  ? 'bg-white text-amber-800 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Pendientes ({totalPendiente > 0 ? rows.filter((r) => r.status === 'pendiente').length : 0})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('baja_temporal')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-                statusFilter === 'baja_temporal'
+                statusFilter === 'bajas'
                   ? 'bg-white text-slate-800 shadow-xs'
                   : 'text-slate-500 hover:text-slate-900'
               }`}
@@ -601,9 +668,8 @@ export const MonthlyBillingTable = () => {
         <div className="md:hidden divide-y divide-slate-100 p-2 sm:p-3 space-y-2.5">
           {filteredRows.map(({ student, tariff, status, price }) => {
             const isBaja = status === 'baja_temporal';
-            const isPagado = status === 'pagado';
-            const isPendiente = status === 'pendiente';
             const cleanPhone = student.phone ? student.phone.replace(/[^0-9]/g, '') : '';
+            const isPrueba = student.status === 'pendiente_aprobacion';
 
             return (
               <div
@@ -611,9 +677,7 @@ export const MonthlyBillingTable = () => {
                 className={`p-3 rounded-2xl border transition-all ${
                   isBaja
                     ? 'bg-slate-50/70 border-slate-200'
-                    : isPagado
-                    ? 'bg-white border-slate-200 shadow-2xs'
-                    : 'bg-amber-50/30 border-amber-200 shadow-2xs'
+                    : 'bg-white border-slate-200 shadow-2xs'
                 }`}
               >
                 {/* Header: Name & Price */}
@@ -673,50 +737,38 @@ export const MonthlyBillingTable = () => {
                 {/* Status Indicator & Quick Action Buttons */}
                 <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
                   <div>
-                    {isPagado && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        <span>Pagado</span>
-                      </span>
-                    )}
-                    {isPendiente && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                        <Clock className="w-3 h-3 text-amber-700" />
-                        <span>Pendiente</span>
-                      </span>
-                    )}
-                    {isBaja && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-200 text-slate-700 border border-slate-300">
+                    {isBaja ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-200 text-slate-700 border border-slate-300">
                         <UserX className="w-3 h-3 text-slate-600" />
                         <span>Baja</span>
                       </span>
+                    ) : (
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>Activo</span>
+                        </span>
+                        {isPrueba && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded-full">
+                            Prueba
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
 
-                  {/* 1-Tap Quick Action Buttons */}
-                  <div className="inline-flex items-center gap-1">
-                    {/* Toggle Pagado / Pendiente */}
-                    {isPagado ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleStatusChange(student.id, 'pendiente', price)
-                        }
-                        className="px-2.5 py-1 rounded-xl text-xs font-bold transition-all bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 cursor-pointer"
-                      >
-                        Pendiente
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleStatusChange(student.id, 'pagado', price)
-                        }
-                        className="px-2.5 py-1 rounded-xl text-xs font-bold transition-all bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs cursor-pointer"
-                      >
-                        Marcar Pagado
-                      </button>
-                    )}
+                  {/* Quick Action Buttons: Editar y Baja */}
+                  <div className="inline-flex items-center gap-1.5">
+                    {/* Botón Editar Alumno */}
+                    <button
+                      type="button"
+                      onClick={() => setStudentToEdit(student)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all bg-white hover:bg-slate-100 text-[#0055A5] border border-slate-200 shadow-2xs cursor-pointer"
+                      title="Editar datos del alumno"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                      <span>Editar</span>
+                    </button>
 
                     {/* Toggle Baja */}
                     <button
@@ -728,13 +780,23 @@ export const MonthlyBillingTable = () => {
                           price
                         )
                       }
-                      className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         isBaja
                           ? 'bg-slate-900 text-white hover:bg-slate-800'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          : 'bg-slate-100 text-slate-700 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 border border-slate-200/80'
                       }`}
                     >
-                      {isBaja ? 'Reactivar' : 'Baja'}
+                      {isBaja ? (
+                        <>
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          <span>Reactivar</span>
+                        </>
+                      ) : (
+                        <>
+                          <UserX className="w-3 h-3 text-rose-500" />
+                          <span>Baja</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -759,15 +821,14 @@ export const MonthlyBillingTable = () => {
                 <th className="py-3 px-4">Abonado</th>
                 <th className="py-3 px-4">Tarifa / Plan</th>
                 <th className="py-3 px-4">Importe Mensual</th>
-                <th className="py-3 px-4">Estado del Recibo</th>
-                <th className="py-3 px-4 text-right">Acción Rápida</th>
+                <th className="py-3 px-4">Estado</th>
+                <th className="py-3 px-4 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredRows.map(({ student, tariff, status, price }) => {
                 const isBaja = status === 'baja_temporal';
-                const isPagado = status === 'pagado';
-                const isPendiente = status === 'pendiente';
+                const isPrueba = student.status === 'pendiente_aprobacion';
 
                 return (
                   <tr
@@ -830,63 +891,41 @@ export const MonthlyBillingTable = () => {
                       {isBaja ? '0.00 € (Baja)' : `${price.toFixed(2)} €`}
                     </td>
 
-                    {/* Estado Badge */}
+                    {/* Estado Badge (Activo / Baja Temporal) */}
                     <td className="py-3 px-4">
-                      {isPagado && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Pagado</span>
-                        </span>
-                      )}
-                      {isPendiente && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                          <Clock className="w-3.5 h-3.5 text-amber-700" />
-                          <span>Pendiente de Pago</span>
-                        </span>
-                      )}
-                      {isBaja && (
+                      {isBaja ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-700 border border-slate-300">
                           <UserX className="w-3.5 h-3.5 text-slate-600" />
                           <span>Baja Temporal</span>
                         </span>
+                      ) : (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Activo</span>
+                          </span>
+                          {isPrueba && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded-full">
+                              Prueba
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
 
-                    {/* Acciones */}
+                    {/* Acciones Rápidas: Editar y Baja */}
                     <td className="py-3 px-4 text-right">
-                      <div className="inline-flex items-center gap-1">
-                        {/* Botón para cambiar entre Pagado y Pendiente */}
-                        {isPagado ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleStatusChange(
-                                student.id,
-                                'pendiente',
-                                price
-                              )
-                            }
-                            className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 cursor-pointer"
-                            title="Marcar como pendiente si aún no ha pagado"
-                          >
-                            Marcar Pendiente
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleStatusChange(
-                                student.id,
-                                'pagado',
-                                price
-                              )
-                            }
-                            className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-                            title="Marcar como pagado"
-                          >
-                            Marcar Pagado
-                          </button>
-                        )}
+                      <div className="inline-flex items-center gap-1.5 justify-end">
+                        {/* Botón Editar Alumno */}
+                        <button
+                          type="button"
+                          onClick={() => setStudentToEdit(student)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-white hover:bg-slate-100 text-[#0055A5] border border-slate-200 hover:border-[#0055A5] shadow-2xs cursor-pointer"
+                          title="Editar datos del alumno"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                          <span>Editar</span>
+                        </button>
 
                         {/* Botón de Baja Temporal */}
                         <button
@@ -898,14 +937,24 @@ export const MonthlyBillingTable = () => {
                               price
                             )
                           }
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                             isBaja
                               ? 'bg-slate-900 text-white hover:bg-slate-800'
-                              : 'bg-slate-100 text-slate-700 hover:bg-rose-50 hover:text-rose-700'
+                              : 'bg-slate-100 text-slate-700 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 border border-slate-200/80'
                           }`}
                           title="Alternar baja temporal para este mes"
                         >
-                          {isBaja ? 'Reactivar' : 'Baja'}
+                          {isBaja ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Reactivar</span>
+                            </>
+                          ) : (
+                            <>
+                              <UserX className="w-3.5 h-3.5 text-rose-500" />
+                              <span>Baja</span>
+                            </>
+                          )}
                         </button>
                       </div>
                     </td>
@@ -924,6 +973,41 @@ export const MonthlyBillingTable = () => {
           </table>
         </div>
       </div>
+
+      {/* Modal Cierre Mensual */}
+      <CloseMonthModal
+        isOpen={closeModalOpen}
+        onClose={() => setCloseModalOpen(false)}
+        monthYear={selectedMonth}
+        formattedMonth={formattedMonth}
+        coachesBreakdown={coachesBreakdown}
+        totalRecaudado={totalRecaudado}
+        totalCosteMonitores={totalCosteMonitores}
+        totalBeneficioEscuela={totalBeneficioEscuela}
+        isAlreadyClosed={isClosed}
+        onConfirmClose={handleConfirmCloseMonth}
+      />
+
+      {/* Modal Rápido Sueldo Monitor */}
+      <CoachSalaryModal
+        isOpen={salaryModalOpen}
+        onClose={() => setSalaryModalOpen(false)}
+        coach={coachForSalary}
+        onSaveSalary={handleSaveSalary}
+      />
+
+      {/* Modal Edición de Alumno */}
+      <StudentFormModal
+        isOpen={!!studentToEdit}
+        onClose={() => setStudentToEdit(null)}
+        studentToEdit={studentToEdit}
+        onSave={async (studentData) => {
+          if (studentToEdit?.id) {
+            await updateStudent(studentToEdit.id, studentData);
+          }
+          setStudentToEdit(null);
+        }}
+      />
     </div>
   );
 };
