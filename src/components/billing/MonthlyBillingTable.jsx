@@ -303,8 +303,8 @@ export const MonthlyBillingTable = () => {
               <Lock className="w-3.5 h-3.5" />
               <span>
                 {isClosed
-                  ? '🔒 Mes Cerrado (Actualizar)'
-                  : '🔒 Cerrar Mes y Guardar Histórico'}
+                  ? ' Mes Cerrado (Actualizar)'
+                  : ' Cerrar Mes y Guardar Histórico'}
               </span>
             </button>
 
