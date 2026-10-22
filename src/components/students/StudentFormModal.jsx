@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Switch } from '../ui/Switch';
@@ -6,7 +6,7 @@ import { useSchool } from '../../context/SchoolContext';
 import { useTariffs } from '../../hooks/useTariffs';
 import { useCoaches } from '../../hooks/useCoaches';
 import { useSchedule } from '../../hooks/useSchedule';
-import { Clock, Calendar, Sparkles } from 'lucide-react';
+import { Clock, Calendar, Sparkles, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 const DAYS_OF_WEEK = [
   { day: 1, short: 'L', label: 'Lunes' },
@@ -16,6 +16,15 @@ const DAYS_OF_WEEK = [
   { day: 5, short: 'V', label: 'Viernes' },
   { day: 6, short: 'S', label: 'Sábado' },
 ];
+
+const DAY_NAMES = {
+  1: 'Lunes',
+  2: 'Martes',
+  3: 'Miércoles',
+  4: 'Jueves',
+  5: 'Viernes',
+  6: 'Sábado',
+};
 
 const TIME_SLOTS = [
   '09:00',
@@ -46,10 +55,11 @@ export const StudentFormModal = ({
   studentToEdit = null,
   onSave,
 }) => {
-  const { sport } = useSchool();
+  const { sport, triggerRefresh } = useSchool();
   const { filteredTariffs } = useTariffs();
   const { filteredCoaches } = useCoaches();
-  const { autoAssignStudentToSchedule } = useSchedule();
+  const { autoAssignStudentToSchedule, slots, allSlots, enrollments } = useSchedule();
+  const scheduleSlots = allSlots || slots || [];
 
   // ONLY full_name is mandatory!
   const [fullName, setFullName] = useState('');
@@ -68,6 +78,10 @@ export const StudentFormModal = ({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Modal para avisos de conflicto elegantes (sustituye a window.alert)
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [conflictModalData, setConflictModalData] = useState(null);
 
   useEffect(() => {
     if (studentToEdit) {
@@ -102,6 +116,160 @@ export const StudentFormModal = ({
     setError('');
   }, [studentToEdit, sport, isOpen]);
 
+  const selectedTariff = filteredTariffs.find((t) => t.id === tariffId);
+  const contractedHoursNum = Number(weeklyHours) || 0;
+  const selectedDaysCount = assignedDays.length;
+
+  // Conflict detection: contracted weekly hours vs days chosen
+  const hasHoursConflict = contractedHoursNum > 0 && selectedDaysCount > contractedHoursNum;
+
+  // Detección en tiempo real de grupos existentes y verificación de aforo completo
+  const targetGroupSummary = useMemo(() => {
+    if (!assignedCoachId || assignedDays.length === 0) {
+      return { matches: [], fullConflicts: [] };
+    }
+
+    const targetLevel = (selectedTariff?.level_label || selectedTariff?.category_name || '').trim().toLowerCase();
+    const targetCat = (selectedTariff?.category_name || '').trim().toLowerCase();
+
+    const matches = [];
+    const fullConflicts = [];
+
+    for (const dayNum of assignedDays) {
+      const dayName = DAY_NAMES[dayNum] || `Día ${dayNum}`;
+
+      // Búsqueda de clase existente para este monitor y nivel en este día
+      let found = scheduleSlots.find((s) => {
+        if (Number(s.day_of_week) !== dayNum) return false;
+        if (s.coach_id !== assignedCoachId) return false;
+        if (tariffId && s.tariff_id === tariffId) return true;
+
+        const sLevel = (s.level_label || '').trim().toLowerCase();
+        const sCat = (s.category_name || '').trim().toLowerCase();
+
+        if (
+          targetLevel &&
+          (sLevel === targetLevel ||
+            sCat === targetLevel ||
+            (targetLevel.length > 3 && (sLevel.includes(targetLevel) || targetLevel.includes(sLevel))))
+        ) {
+          return true;
+        }
+
+        if (
+          targetCat &&
+          (sLevel === targetCat ||
+            sCat === targetCat ||
+            (targetCat.length > 3 && (sCat.includes(targetCat) || targetCat.includes(sCat))))
+        ) {
+          return true;
+        }
+
+        return false;
+      });
+
+      if (found) {
+        const currentStudentId = studentToEdit?.id;
+        const slotEnrollments = (enrollments || []).filter(
+          (e) => e.class_slot_id === found.id && e.student_id !== currentStudentId
+        );
+        const maxCap = Number(found.max_capacity) || Number(selectedTariff?.max_students) || 4;
+        const enrolledCount = slotEnrollments.length;
+        const isFull = enrolledCount >= maxCap;
+
+        const matchInfo = {
+          dayNum,
+          dayName,
+          startTime: (found.start_time || '').slice(0, 5),
+          endTime: (found.end_time || '').slice(0, 5),
+          levelLabel: found.level_label || found.category_name || 'Grupo',
+          slotId: found.id,
+          enrolledCount,
+          maxCapacity: maxCap,
+          isFull,
+        };
+
+        matches.push(matchInfo);
+
+        if (isFull) {
+          fullConflicts.push({
+            ...matchInfo,
+            message: `La clase del ${dayName} (${matchInfo.levelLabel} a las ${matchInfo.startTime}) está completa (${enrolledCount}/${maxCap} plazas).`,
+          });
+        }
+      }
+    }
+
+    return { matches, fullConflicts };
+  }, [
+    assignedCoachId,
+    assignedDays,
+    tariffId,
+    selectedTariff,
+    scheduleSlots,
+    enrollments,
+    studentToEdit,
+  ]);
+
+  const existingGroupMatches = targetGroupSummary.matches;
+  const fullClassConflicts = targetGroupSummary.fullConflicts;
+  const hasFullClassConflict = fullClassConflicts.length > 0;
+
+  // Calcular la próxima hora disponible para el monitor si a las 17:00 ya tiene otra clase
+  const nextAvailableTime = useMemo(() => {
+    if (!assignedCoachId || assignedDays.length === 0) return '17:00';
+
+    // Si ya existe un grupo de este nivel, la hora del grupo manda
+    if (existingGroupMatches.length > 0 && existingGroupMatches[0]?.startTime) {
+      return existingGroupMatches[0].startTime;
+    }
+
+    const preferred = assignedTime || '17:00';
+    const cleanPref = preferred.slice(0, 5);
+
+    const isBusyOnAnyDay = (timeStr) => {
+      const cleanTime = timeStr.slice(0, 5);
+      return assignedDays.some((dayNum) =>
+        scheduleSlots.some(
+          (s) =>
+            Number(s.day_of_week) === dayNum &&
+            s.coach_id === assignedCoachId &&
+            (s.start_time || '').slice(0, 5) === cleanTime
+        )
+      );
+    };
+
+    if (!isBusyOnAnyDay(cleanPref)) return cleanPref;
+
+    // 1. Probar hacia adelante: +1h, +2h, etc. hasta 21:00
+    const [prefH = 17, prefM = 0] = cleanPref.split(':').map(Number);
+    for (let h = prefH + 1; h <= 21; h++) {
+      const cand = `${String(h).padStart(2, '0')}:${String(prefM).padStart(2, '0')}`;
+      if (!isBusyOnAnyDay(cand)) return cand;
+    }
+
+    // 2. Probar hacia atrás (16:00, 15:00)
+    for (let h = prefH - 1; h >= 15; h--) {
+      const cand = `${String(h).padStart(2, '0')}:${String(prefM).padStart(2, '0')}`;
+      if (!isBusyOnAnyDay(cand)) return cand;
+    }
+
+    // 3. Probar mañanas
+    for (const cand of ['10:00', '11:00', '12:00', '09:00']) {
+      if (!isBusyOnAnyDay(cand)) return cand;
+    }
+
+    return cleanPref;
+  }, [assignedCoachId, assignedDays, assignedTime, existingGroupMatches, scheduleSlots]);
+
+  const handleTariffChange = (newTariffId) => {
+    setTariffId(newTariffId);
+    const found = filteredTariffs.find((t) => t.id === newTariffId);
+    if (found?.hours_per_week) {
+      setWeeklyHours(String(found.hours_per_week));
+    }
+  };
+
   const handleToggleDay = (dayNum) => {
     setAssignedDays((prev) => {
       const exists = prev.includes(dayNum);
@@ -109,7 +277,8 @@ export const StudentFormModal = ({
         ? prev.filter((d) => d !== dayNum)
         : [...prev, dayNum].sort((a, b) => a - b);
 
-      if (updated.length > 0) {
+      // If weeklyHours wasn't set, sync it with selected days
+      if (!weeklyHours && updated.length > 0) {
         setWeeklyHours(String(updated.length));
       }
       return updated;
@@ -123,11 +292,28 @@ export const StudentFormModal = ({
       return;
     }
 
+    // 1. Bloqueo por conflicto de horas contratadas vs días
+    if (hasHoursConflict) {
+      setError(
+        `Conflicto de horario: Has seleccionado ${selectedDaysCount} días (${assignedDays.map((d) => DAY_NAMES[d]).join(', ')}), pero el alumno tiene ${contractedHoursNum} hora${contractedHoursNum > 1 ? 's' : ''} semanal${contractedHoursNum > 1 ? 'es' : ''} contratada${contractedHoursNum > 1 ? 's' : ''}. Un alumno de ${contractedHoursNum}h no puede tener ${selectedDaysCount} clases. Ajusta los días o amplía las horas contratadas.`
+      );
+      return;
+    }
+
+    // 2. Bloqueo por clase completa (aforo superado) -> NO SE PERMITE CREAR
+    if (hasFullClassConflict) {
+      setConflictModalData({
+        title: 'Clase Completa — Sin Plazas Libres',
+        conflicts: fullClassConflicts.map((c) => c.message),
+        solution: 'Esta clase ya ha alcanzado el límite máximo de alumnos (4/4). No es posible crear ni matricular al alumno aquí. Selecciona otro día u otro monitor para continuar.',
+      });
+      setShowConflictModal(true);
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
-
-      const selectedTariff = filteredTariffs.find((t) => t.id === tariffId);
 
       const savedStudent = await onSave({
         full_name: fullName.trim(),
@@ -144,19 +330,34 @@ export const StudentFormModal = ({
 
       // LÓGICA INTELIGENTE DE AUTO-ASIGNACIÓN DE CLASES
       const targetStudentId = savedStudent?.id || studentToEdit?.id;
-      if (targetStudentId && assignedDays.length > 0 && assignedTime) {
-        await autoAssignStudentToSchedule({
+      if (targetStudentId && assignedDays.length > 0) {
+        const effectiveStartTime =
+          assignedTime || existingGroupMatches[0]?.startTime || nextAvailableTime || '17:00';
+
+        const result = await autoAssignStudentToSchedule({
           studentId: targetStudentId,
           coachId: assignedCoachId || null,
           daysOfWeek: assignedDays,
-          startTime: assignedTime,
+          startTime: effectiveStartTime,
           tariffId: tariffId || null,
           levelLabel: selectedTariff?.level_label || selectedTariff?.category_name || 'General',
+          categoryName: selectedTariff?.category_name || 'General',
           sport: studentSport,
           maxCapacity: selectedTariff?.max_students || 4,
         });
+
+        if (result?.conflicts && result.conflicts.length > 0) {
+          setConflictModalData({
+            title: 'Aviso de Conflicto en Cuadrante',
+            conflicts: result.conflicts,
+            solution: 'El alumno ha sido registrado, pero no se ha podido inscribir automáticamente en todas las clases por limitaciones de aforo. Puedes resolverlo manualmente en el cuadrante.',
+          });
+          setShowConflictModal(true);
+          return;
+        }
       }
 
+      if (triggerRefresh) triggerRefresh();
       onClose();
     } catch (err) {
       setError(err.message || 'Error guardando alumno');
@@ -234,13 +435,13 @@ export const StudentFormModal = ({
             </label>
             <select
               value={tariffId}
-              onChange={(e) => setTariffId(e.target.value)}
+              onChange={(e) => handleTariffChange(e.target.value)}
               className="w-full px-3 py-2 text-xs md:text-sm bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0055A5]/30 cursor-pointer"
             >
               <option value="">Sin tarifa fija</option>
               {filteredTariffs.map((t) => (
                 <option key={t.id} value={t.id}>
-                  [{t.code}] {t.category_name || t.level_label} ({t.price_non_member}€)
+                  [{t.code}] {t.category_name || t.level_label} ({t.hours_per_week ? `${t.hours_per_week}h/sem - ` : ''}{t.price_non_member}€)
                 </option>
               ))}
             </select>
@@ -253,6 +454,7 @@ export const StudentFormModal = ({
             <input
               type="number"
               step="0.5"
+              min="0.5"
               value={weeklyHours}
               onChange={(e) => setWeeklyHours(e.target.value)}
               placeholder="1, 2, 3..."
@@ -298,7 +500,7 @@ export const StudentFormModal = ({
           </div>
 
           <p className="text-[11px] text-slate-500 leading-snug">
-            Indica el profesor, días y hora. El sistema buscará las clases en el cuadrante o las creará al vuelo para inscribir al alumno de forma inmediata.
+            Indica el profesor y los días. Si el profesor ya tiene un grupo de este nivel, el alumno se integrará automáticamente en su misma clase.
           </p>
 
           {/* Profesor */}
@@ -353,13 +555,97 @@ export const StudentFormModal = ({
                 );
               })}
             </div>
+
+            {/* Aviso visual inmediato de conflicto de horas contratadas vs días */}
+            {hasHoursConflict && (
+              <div className="mt-2 p-2.5 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-800 flex items-start gap-2 shadow-xs">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Conflicto de horas contratadas vs días:</span>
+                  <p className="mt-0.5 text-[11px] leading-relaxed">
+                    El alumno tiene <strong>{contractedHoursNum}h/semana</strong> contratadas, pero has seleccionado <strong>{selectedDaysCount} días</strong> ({assignedDays.map((d) => DAY_NAMES[d]).join(', ')}). No puede tener más clases que horas contratadas. Ajusta los días o amplía las horas semanales.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Aviso visual inmediato de CLASE COMPLETA (Aforo superado) */}
+            {hasFullClassConflict && (
+              <div className="mt-2 p-3 bg-rose-50 border-2 border-rose-400 rounded-2xl text-xs text-rose-900 flex items-start gap-2.5 shadow-sm">
+                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-rose-800 uppercase tracking-tight text-[11px]">
+                      Clase Completa (Sin plazas disponibles)
+                    </span>
+                    <span className="text-[10px] bg-rose-200/80 text-rose-900 font-bold px-2 py-0.5 rounded-full uppercase">
+                      No se puede crear
+                    </span>
+                  </div>
+                  <div className="mt-1.5 space-y-1 text-[11px]">
+                    {fullClassConflicts.map((c) => (
+                      <div
+                        key={c.dayNum}
+                        className="flex items-center justify-between bg-white/80 p-2 rounded-xl border border-rose-200"
+                      >
+                        <span>
+                          • <strong>{c.dayName} a las {c.startTime}</strong> ({c.levelLabel})
+                        </span>
+                        <span className="font-black text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md text-[11px]">
+                          {c.enrolledCount}/{c.maxCapacity} plazas
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-[10px] text-rose-700 font-semibold leading-snug">
+                    Esta clase está al 100% de ocupación. No se puede crear el alumno aquí. Selecciona otro día disponible o cambia de monitor.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Hora */}
+          {/* Detección de Grupo Existente con el profesor (Solo si hay plazas libres) */}
+          {existingGroupMatches.length > 0 && !hasFullClassConflict && (
+            <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-800 flex items-start gap-2 shadow-xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <span className="font-bold">Grupo existente detectado con este monitor:</span>
+                <div className="mt-1 text-[11px] text-emerald-700 space-y-1">
+                  {existingGroupMatches.map((m) => (
+                    <div key={m.dayNum} className="flex items-center justify-between">
+                      <span>
+                        • <strong>{m.dayName} a las {m.startTime}</strong> ({m.levelLabel})
+                      </span>
+                      <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100/90 px-1.5 py-0.5 rounded">
+                        {m.enrolledCount}/{m.maxCapacity} plazas ({m.maxCapacity - m.enrolledCount} {m.maxCapacity - m.enrolledCount === 1 ? 'libre' : 'libres'})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-1 text-[10px] text-emerald-600 font-medium">
+                  El alumno se unirá automáticamente a esta misma clase existente en su hora establecida.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Hora de la clase (Opcional) */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-700 mb-1">
-              Hora de la Clase
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-[11px] font-bold text-slate-700">
+                Hora de la Clase <span className="text-[10px] font-normal text-slate-400">(Opcional)</span>
+              </label>
+              {existingGroupMatches.length > 0 ? (
+                <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-100/80 px-1.5 py-0.5 rounded">
+                  Usa hora del grupo ({existingGroupMatches[0]?.startTime})
+                </span>
+              ) : nextAvailableTime && nextAvailableTime !== '17:00' ? (
+                <span className="text-[10px] text-indigo-700 font-semibold bg-indigo-100/80 px-1.5 py-0.5 rounded">
+                  Siguiente libre: {nextAvailableTime}
+                </span>
+              ) : null}
+            </div>
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Clock className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" />
@@ -368,7 +654,13 @@ export const StudentFormModal = ({
                   onChange={(e) => setAssignedTime(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0055A5]/30 cursor-pointer font-medium text-slate-800"
                 >
-                  <option value="">Selecciona hora habitual...</option>
+                  <option value="">
+                    {existingGroupMatches.length > 0
+                      ? `Automática (${existingGroupMatches[0]?.startTime})`
+                      : nextAvailableTime && nextAvailableTime !== '17:00'
+                      ? `Siguiente disponible (${nextAvailableTime})`
+                      : 'Por defecto (17:00)'}
+                  </option>
                   {TIME_SLOTS.map((t) => (
                     <option key={t} value={t}>
                       {t}
@@ -380,9 +672,17 @@ export const StudentFormModal = ({
                 type="time"
                 value={assignedTime}
                 onChange={(e) => setAssignedTime(e.target.value)}
+                placeholder={existingGroupMatches[0]?.startTime || nextAvailableTime || '17:00'}
                 className="w-28 px-2 py-1 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0055A5]/30 text-center font-medium"
               />
             </div>
+            <p className="text-[10px] text-slate-400 mt-1">
+              {existingGroupMatches.length > 0
+                ? 'El monitor ya imparte este nivel en ese horario. Se agruparán juntos automáticamente.'
+                : nextAvailableTime && nextAvailableTime !== '17:00'
+                ? `El monitor ya tiene otra clase a las 17:00. Se creará automáticamente a las ${nextAvailableTime} (primera hora libre).`
+                : 'Si no indicas hora, se creará la clase a las 17:00 automáticamente.'}
+            </p>
           </div>
         </div>
 
@@ -415,11 +715,87 @@ export const StudentFormModal = ({
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             Cancelar
           </Button>
-          <Button type="submit" variant="primary" loading={loading}>
-            {studentToEdit ? 'Guardar Alumno' : 'Crear e Inscribir Alumno'}
+          <Button
+            type="submit"
+            variant={hasFullClassConflict ? 'danger' : 'primary'}
+            loading={loading}
+            disabled={loading || hasHoursConflict || hasFullClassConflict}
+            title={
+              hasFullClassConflict
+                ? 'No se puede crear el alumno: la clase seleccionada está completa'
+                : hasHoursConflict
+                ? 'Corrige el conflicto de horas vs días antes de guardar'
+                : ''
+            }
+          >
+            {hasFullClassConflict
+              ? 'Clase Completa (Sin Plazas)'
+              : studentToEdit
+              ? 'Guardar Alumno'
+              : 'Crear e Inscribir Alumno'}
           </Button>
         </div>
       </form>
+
+      {/* Modal de Conflicto de Aforo / Horario (Sustituye a window.alert nativo) */}
+      {showConflictModal && (
+        <Modal
+          isOpen={showConflictModal}
+          onClose={() => setShowConflictModal(false)}
+          title={conflictModalData?.title || 'Conflicto de Horario'}
+          subtitle="No es posible realizar la inscripción."
+          maxWidth="max-w-md"
+        >
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl">
+              <div className="p-2 bg-rose-100 text-rose-700 rounded-xl shrink-0">
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+              </div>
+              <div className="text-xs text-rose-900 flex-1">
+                <h4 className="font-bold text-sm text-rose-800 mb-1">
+                  Aforo Completo — No se puede crear
+                </h4>
+                <p className="text-rose-700 leading-relaxed">
+                  La clase a la que intentas asignar al alumno no dispone de plazas libres:
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {conflictModalData?.conflicts?.map((msg, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 flex items-center justify-between"
+                >
+                  <span className="leading-snug">{msg}</span>
+                  <span className="text-[10px] bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ml-2">
+                    Completa
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {conflictModalData?.solution && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+                <span className="font-bold block mb-0.5">¿Cómo proceder?</span>
+                <p className="text-[11px] text-amber-800 leading-snug">
+                  {conflictModalData.solution}
+                </p>
+              </div>
+            )}
+
+            <div className="pt-2 flex justify-end">
+              <Button
+                variant="primary"
+                onClick={() => setShowConflictModal(false)}
+                className="w-full sm:w-auto text-xs font-bold"
+              >
+                Entendido, cambiar horario
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </Modal>
   );
 };

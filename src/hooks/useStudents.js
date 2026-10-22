@@ -5,7 +5,7 @@ import { useSchool } from '../context/SchoolContext';
 
 export const useStudents = () => {
   const { adminId } = useAuth();
-  const { refreshKey, sport } = useSchool();
+  const { refreshKey, sport, triggerRefresh } = useSchool();
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -82,6 +82,7 @@ export const useStudents = () => {
 
       if (err) throw err;
       setStudents((prev) => prev.map((s) => (s.id === tempId ? data : s)));
+      if (triggerRefresh) triggerRefresh();
       return data;
     } catch (err) {
       setStudents((prev) => prev.filter((s) => s.id !== tempId));
@@ -106,6 +107,7 @@ export const useStudents = () => {
 
       if (err) throw err;
       setStudents((prev) => prev.map((s) => (s.id === id ? data : s)));
+      if (triggerRefresh) triggerRefresh();
       return data;
     } catch (err) {
       setStudents(previous);
@@ -125,6 +127,7 @@ export const useStudents = () => {
         .eq('admin_id', adminId);
 
       if (err) throw err;
+      if (triggerRefresh) triggerRefresh();
     } catch (err) {
       setStudents(previous);
       throw err;

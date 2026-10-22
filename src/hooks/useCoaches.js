@@ -5,7 +5,7 @@ import { useSchool } from '../context/SchoolContext';
 
 export const useCoaches = () => {
   const { adminId } = useAuth();
-  const { refreshKey, sport } = useSchool();
+  const { refreshKey, sport, triggerRefresh } = useSchool();
   const [coaches, setCoaches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -77,6 +77,7 @@ export const useCoaches = () => {
 
       // Replace optimistic coach with actual DB row
       setCoaches((prev) => prev.map((c) => (c.id === tempId ? data : c)));
+      if (triggerRefresh) triggerRefresh();
       return data;
     } catch (err) {
       // Rollback
@@ -103,6 +104,7 @@ export const useCoaches = () => {
 
       if (err) throw err;
       setCoaches((prev) => prev.map((c) => (c.id === id ? data : c)));
+      if (triggerRefresh) triggerRefresh();
       return data;
     } catch (err) {
       setCoaches(previousCoaches);
@@ -122,6 +124,7 @@ export const useCoaches = () => {
         .eq('admin_id', adminId);
 
       if (err) throw err;
+      if (triggerRefresh) triggerRefresh();
     } catch (err) {
       setCoaches(previousCoaches);
       throw err;

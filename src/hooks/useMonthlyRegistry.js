@@ -5,7 +5,7 @@ import { useSchool } from '../context/SchoolContext';
 
 export const useMonthlyRegistry = () => {
   const { adminId } = useAuth();
-  const { selectedMonth, refreshKey } = useSchool();
+  const { selectedMonth, refreshKey, triggerRefresh } = useSchool();
   const [registryEntries, setRegistryEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -110,6 +110,7 @@ export const useMonthlyRegistry = () => {
         setRegistryEntries((prev) =>
           prev.map((e) => (e.id === existing.id ? data : e))
         );
+        if (triggerRefresh) triggerRefresh();
         return data;
       } else {
         const { data, error: err } = await supabase
@@ -129,6 +130,7 @@ export const useMonthlyRegistry = () => {
         setRegistryEntries((prev) =>
           prev.map((e) => (e.student_id === studentId ? data : e))
         );
+        if (triggerRefresh) triggerRefresh();
         return data;
       }
     } catch (err) {

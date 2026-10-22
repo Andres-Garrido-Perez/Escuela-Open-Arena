@@ -3,9 +3,18 @@ import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useSchool } from '../context/SchoolContext';
 
+const DAY_NAMES = {
+  1: 'Lunes',
+  2: 'Martes',
+  3: 'Miércoles',
+  4: 'Jueves',
+  5: 'Viernes',
+  6: 'Sábado',
+};
+
 export const useSchedule = () => {
   const { adminId } = useAuth();
-  const { sport, activeCoachId, refreshKey } = useSchool();
+  const { sport, activeCoachId, refreshKey, triggerRefresh } = useSchool();
 
   const [slots, setSlots] = useState([]);
   const [enrollments, setEnrollments] = useState([]);
@@ -104,6 +113,7 @@ export const useSchedule = () => {
 
       if (err) throw err;
       setSlots((prev) => prev.map((s) => (s.id === tempId ? data : s)));
+      if (triggerRefresh) triggerRefresh();
       return data;
     } catch (err) {
       setSlots((prev) => prev.filter((s) => s.id !== tempId));
@@ -129,6 +139,7 @@ export const useSchedule = () => {
 
       if (err) throw err;
       setSlots((prev) => prev.map((s) => (s.id === slotId ? data : s)));
+      if (triggerRefresh) triggerRefresh();
       return data;
     } catch (err) {
       setSlots(previous);
@@ -159,6 +170,7 @@ export const useSchedule = () => {
         .eq('admin_id', adminId);
 
       if (err) throw err;
+      if (triggerRefresh) triggerRefresh();
     } catch (err) {
       setSlots(prevSlots);
       setEnrollments(prevEnrollments);
@@ -268,6 +280,7 @@ export const useSchedule = () => {
         }
       }
 
+      if (triggerRefresh) triggerRefresh();
       return data;
     } catch (err) {
       setEnrollments((prev) => prev.filter((e) => e.id !== tempEnrollId));
@@ -298,13 +311,14 @@ export const useSchedule = () => {
         .eq('admin_id', adminId);
 
       if (err) throw err;
+      if (triggerRefresh) triggerRefresh();
     } catch (err) {
       setEnrollments(prevEnrollments);
       throw err;
     }
   };
 
-  // Auto-assign student to schedule based on coach, days and time
+  // Auto-assign student to schedule based on coach, days and group/level
   const autoAssignStudentToSchedule = async ({
     studentId,
     coachId,
@@ -313,66 +327,172 @@ export const useSchedule = () => {
     endTime,
     tariffId,
     levelLabel,
+    categoryName,
     sport: targetSport,
     maxCapacity = 4,
   }) => {
-    if (!studentId || !Array.isArray(daysOfWeek) || daysOfWeek.length === 0 || !startTime) {
-      return { assigned: 0 };
+    if (!studentId || !Array.isArray(daysOfWeek) || daysOfWeek.length === 0) {
+      return { assigned: 0, conflicts: [] };
     }
 
     const currentSport = targetSport || sport || 'tenis';
-    const cleanStartTime = startTime.slice(0, 5);
-
-    // Calculate default endTime if not provided (+1h)
-    let cleanEndTime = endTime ? endTime.slice(0, 5) : '';
-    if (!cleanEndTime) {
-      const [sh = 16, sm = 0] = cleanStartTime.split(':').map(Number);
-      const endHour = (sh + 1).toString().padStart(2, '0');
-      const endMin = sm.toString().padStart(2, '0');
-      cleanEndTime = `${endHour}:${endMin}`;
-    }
+    const fallbackStartTime = startTime ? startTime.slice(0, 5) : '17:00';
 
     let assignedCount = 0;
     const createdSlotIds = [];
+    const conflicts = [];
+
+    const effectiveSlots = [...(slots || [])];
 
     for (const day of daysOfWeek) {
       const dayNum = Number(day);
       if (isNaN(dayNum) || dayNum < 1 || dayNum > 6) continue;
 
-      // Find matching slot across allSlots/slots
-      const existingSlots = slots.length > 0 ? slots : [];
-      let targetSlot = existingSlots.find((s) => {
-        const matchesDay = Number(s.day_of_week) === dayNum;
-        const matchesTime = (s.start_time || '').slice(0, 5) === cleanStartTime;
-        const matchesSport = !s.sport || s.sport === currentSport;
-        const matchesCoach = coachId ? s.coach_id === coachId : true;
-        return matchesDay && matchesTime && matchesSport && matchesCoach;
+      const dayName = DAY_NAMES[dayNum] || `Día ${dayNum}`;
+
+      // 1. Group matching: Look for an existing class slot for this coach on this day of the SAME GROUP/LEVEL
+      // "si se crean 2 alumnos del mismo grupo para un profesor aunque pongas diferentes horas se deberia meter en el mismo grupo ya que un profe no va a dar 2 clases del mismo tipo en un dia en principio"
+      let targetSlot = effectiveSlots.find((s) => {
+        if (Number(s.day_of_week) !== dayNum) return false;
+        if (s.sport && s.sport !== currentSport) return false;
+        if (coachId && s.coach_id !== coachId) return false;
+
+        // Match by exact tariff ID
+        if (tariffId && s.tariff_id === tariffId) return true;
+
+        // Match by level label or category name
+        const normLevel = (levelLabel || '').trim().toLowerCase();
+        const normCat = (categoryName || '').trim().toLowerCase();
+        const sLevel = (s.level_label || '').trim().toLowerCase();
+        const sCat = (s.category_name || '').trim().toLowerCase();
+
+        if (
+          normLevel &&
+          (sLevel === normLevel ||
+            sCat === normLevel ||
+            (normLevel.length > 3 && (sLevel.includes(normLevel) || normLevel.includes(sLevel))))
+        ) {
+          return true;
+        }
+
+        if (
+          normCat &&
+          (sLevel === normCat ||
+            sCat === normCat ||
+            (normCat.length > 3 && (sCat.includes(normCat) || normCat.includes(sCat))))
+        ) {
+          return true;
+        }
+
+        return false;
       });
 
-      // If slot doesn't exist, create it on the fly!
-      if (!targetSlot) {
+      // 2. If existing slot exists for this exact group/level, check capacity
+      if (targetSlot) {
+        const slotEnrollments = enrollments.filter((e) => e.class_slot_id === targetSlot.id);
+        const isAlreadyEnrolled = slotEnrollments.some((e) => e.student_id === studentId);
+
+        if (isAlreadyEnrolled) {
+          assignedCount += 1;
+          continue;
+        }
+
+        const slotCapacity = Number(targetSlot.max_capacity) || Number(maxCapacity) || 4;
+        if (slotEnrollments.length >= slotCapacity) {
+          conflicts.push(
+            `La clase del ${dayName} (${targetSlot.level_label || 'Grupo'} a las ${(targetSlot.start_time || '').slice(0, 5)}) está completa (${slotEnrollments.length}/${slotCapacity} plazas).`
+          );
+          continue;
+        }
+      } else {
+        // 3. If slot doesn't exist for this coach + group on this day: CREATE IT!
+        // Si el monitor ya imparte otra clase a esta hora, buscar la siguiente hora disponible
+        let slotStartTime = fallbackStartTime;
+
+        if (coachId) {
+          const isCoachBusy = (timeStr) => {
+            const cleanTime = timeStr.slice(0, 5);
+            return effectiveSlots.some(
+              (s) =>
+                Number(s.day_of_week) === dayNum &&
+                s.coach_id === coachId &&
+                (s.start_time || '').slice(0, 5) === cleanTime
+            );
+          };
+
+          if (isCoachBusy(slotStartTime)) {
+            const [prefH = 17, prefM = 0] = slotStartTime.split(':').map(Number);
+            let foundFree = null;
+
+            // 1. Buscar hacia adelante: +1h, +2h, etc. hasta las 21:00
+            for (let h = prefH + 1; h <= 21; h++) {
+              const candidate = `${String(h).padStart(2, '0')}:${String(prefM).padStart(2, '0')}`;
+              if (!isCoachBusy(candidate)) {
+                foundFree = candidate;
+                break;
+              }
+            }
+
+            // 2. Si no hay hueco hacia adelante, buscar hacia atrás (16:00, 15:00)
+            if (!foundFree) {
+              for (let h = prefH - 1; h >= 15; h--) {
+                const candidate = `${String(h).padStart(2, '0')}:${String(prefM).padStart(2, '0')}`;
+                if (!isCoachBusy(candidate)) {
+                  foundFree = candidate;
+                  break;
+                }
+              }
+            }
+
+            // 3. Si tampoco, probar por las mañanas
+            if (!foundFree) {
+              for (const cand of ['10:00', '11:00', '12:00', '09:00']) {
+                if (!isCoachBusy(cand)) {
+                  foundFree = cand;
+                  break;
+                }
+              }
+            }
+
+            if (foundFree) {
+              slotStartTime = foundFree;
+            }
+          }
+        }
+
+        let slotEndTime = endTime ? endTime.slice(0, 5) : '';
+        if (!slotEndTime) {
+          const [sh = 17, sm = 0] = slotStartTime.split(':').map(Number);
+          const endHour = (sh + 1).toString().padStart(2, '0');
+          const endMin = sm.toString().padStart(2, '0');
+          slotEndTime = `${endHour}:${endMin}`;
+        }
+
         try {
           targetSlot = await addClassSlot({
             coach_id: coachId || null,
             sport: currentSport,
             day_of_week: dayNum,
-            start_time: cleanStartTime,
-            end_time: cleanEndTime,
-            level_label: levelLabel || 'General',
-            category_name: levelLabel || 'General',
+            start_time: slotStartTime,
+            end_time: slotEndTime,
+            level_label: levelLabel || categoryName || 'General',
+            category_name: categoryName || levelLabel || 'General',
             tariff_id: tariffId || null,
             max_capacity: Number(maxCapacity) || 4,
             court_name: null,
           });
           if (targetSlot?.id) {
             createdSlotIds.push(targetSlot.id);
+            effectiveSlots.push(targetSlot);
           }
         } catch (slotCreateErr) {
           console.error(`Error auto-creando clase para día ${dayNum}:`, slotCreateErr);
+          conflicts.push(`Error creando clase para el ${dayName}: ${slotCreateErr.message}`);
+          continue;
         }
       }
 
-      // Enroll student in the target slot
+      // 4. Enroll student in the target slot
       if (targetSlot?.id) {
         try {
           await enrollStudent({
@@ -384,11 +504,18 @@ export const useSchedule = () => {
           assignedCount += 1;
         } catch (enrollErr) {
           console.error(`Error inscribiendo en clase ${targetSlot.id}:`, enrollErr);
+          conflicts.push(`Error inscribiendo en clase del ${dayName}: ${enrollErr.message}`);
         }
       }
     }
 
-    return { assigned: assignedCount, createdSlotIds };
+    try {
+      await fetchSchedule();
+    } catch (_) {}
+
+    if (triggerRefresh) triggerRefresh();
+
+    return { assigned: assignedCount, createdSlotIds, conflicts };
   };
 
   return {

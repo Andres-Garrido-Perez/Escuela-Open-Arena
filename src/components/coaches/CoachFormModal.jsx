@@ -156,7 +156,7 @@ export const CoachFormModal = ({
 
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1">
-            Coste por Hora (€) (Opcional)
+            Coste por Hora (€)
           </label>
           <input
             type="number"

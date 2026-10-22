@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { format } from 'date-fns';
 import { supabase } from '../config/supabaseClient';
 import { useAuth } from './AuthContext';
@@ -33,6 +33,54 @@ export const SchoolProvider = ({ children }) => {
   const triggerRefresh = useCallback(() => {
     setRefreshKey((prev) => prev + 1);
   }, []);
+
+  // Supabase Realtime: Sincronización instantánea en vivo en toda la web sin necesidad de recargar la página
+  useEffect(() => {
+    if (!adminId) return;
+
+    const channel = supabase
+      .channel('school_realtime_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'students' },
+        () => triggerRefresh()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'class_slots' },
+        () => triggerRefresh()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'class_enrollments' },
+        () => triggerRefresh()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'coaches' },
+        () => triggerRefresh()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tariffs' },
+        () => triggerRefresh()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'monthly_registry' },
+        () => triggerRefresh()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'monthly_closures' },
+        () => triggerRefresh()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [adminId, triggerRefresh]);
 
   const seedSchoolData = useCallback(async () => {
     try {

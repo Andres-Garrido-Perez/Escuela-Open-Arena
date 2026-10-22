@@ -1003,9 +1003,10 @@ export const MonthlyBillingTable = () => {
         studentToEdit={studentToEdit}
         onSave={async (studentData) => {
           if (studentToEdit?.id) {
-            await updateStudent(studentToEdit.id, studentData);
+            const updated = await updateStudent(studentToEdit.id, studentData);
+            setStudentToEdit(null);
+            return updated;
           }
-          setStudentToEdit(null);
         }}
       />
     </div>

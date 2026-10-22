@@ -5,7 +5,7 @@ import { useSchool } from '../context/SchoolContext';
 
 export const useMonthlyClosures = () => {
   const { adminId } = useAuth();
-  const { refreshKey } = useSchool();
+  const { refreshKey, triggerRefresh } = useSchool();
   const [closures, setClosures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -112,6 +112,7 @@ export const useMonthlyClosures = () => {
       if (upsertErr) throw upsertErr;
 
       await fetchClosures();
+      if (triggerRefresh) triggerRefresh();
       return data;
     } catch (err) {
       console.error('Error closing month:', err);
