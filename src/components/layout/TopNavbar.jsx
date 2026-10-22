@@ -95,7 +95,7 @@ export const TopNavbar = () => {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span>🎾</span>
+              <span>🎾Tenis</span>
               <span className="hidden xs:inline">Tenis</span>
             </button>
             <button
@@ -107,7 +107,7 @@ export const TopNavbar = () => {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span>🏸</span>
+              <span>🏸Padel</span>
               <span className="hidden xs:inline">Pádel</span>
             </button>
           </div>
