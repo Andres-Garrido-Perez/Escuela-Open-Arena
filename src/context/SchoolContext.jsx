@@ -20,8 +20,14 @@ export const SchoolProvider = ({ children }) => {
   // Main view tab: 'cuadrante' | 'facturacion'
   const [activeView, setActiveView] = useState('cuadrante');
 
-  // Saturday visible in grid
-  const [showSaturday, setShowSaturday] = useState(false);
+  // Saturday visible in grid (ahora siempre visible por defecto)
+  const [showSaturday, setShowSaturday] = useState(true);
+
+  // Visibilidad del directorio de alumnos (abrir / cerrar para ver sábados)
+  const [isStudentsSidebarOpen, setIsStudentsSidebarOpen] = useState(true);
+
+  // Modo Reorganizar Clases (Arrastrar y soltar clases de un día u hora a otra)
+  const [isReorganizing, setIsReorganizing] = useState(false);
 
   // Profitability overlay in schedule cards
   const [showProfitability, setShowProfitability] = useState(false);
@@ -113,6 +119,10 @@ export const SchoolProvider = ({ children }) => {
         setActiveView,
         showSaturday,
         setShowSaturday,
+        isStudentsSidebarOpen,
+        setIsStudentsSidebarOpen,
+        isReorganizing,
+        setIsReorganizing,
         showProfitability,
         setShowProfitability,
         refreshKey,

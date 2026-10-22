@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSchool } from '../../context/SchoolContext';
 import { useStudents } from '../../hooks/useStudents';
 import { useTariffs } from '../../hooks/useTariffs';
 import { useMonthlyRegistry } from '../../hooks/useMonthlyRegistry';
@@ -6,9 +7,10 @@ import { StudentCard } from './StudentCard';
 import { StudentFormModal } from './StudentFormModal';
 import { SearchInput } from '../ui/SearchInput';
 import { Button } from '../ui/Button';
-import { Users, UserPlus } from 'lucide-react';
+import { Users, UserPlus, PanelRightClose } from 'lucide-react';
 
 export const StudentsSidebar = () => {
+  const { setIsStudentsSidebarOpen } = useSchool();
   const { filteredStudents, addStudent, updateStudent, deleteStudent } =
     useStudents();
   const { tariffs } = useTariffs();
@@ -67,22 +69,35 @@ export const StudentsSidebar = () => {
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-[#0055A5]" />
             <h2 className="text-sm font-black text-slate-800 uppercase tracking-tight m-0">
-              Directorio de Alumnos
+              Alumnos
             </h2>
             <span className="text-[11px] font-bold text-[#0055A5] bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
               {displayedStudents.length}
             </span>
           </div>
 
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleOpenCreate}
-            icon={UserPlus}
-            className="text-xs font-bold"
-          >
-            Nuevo Alumno
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleOpenCreate}
+              icon={UserPlus}
+              className="text-xs font-bold"
+            >
+              Nuevo
+            </Button>
+
+            {/* Botón para ocultar/cerrar el directorio y ver sábado en grande */}
+            <button
+              type="button"
+              onClick={() => setIsStudentsSidebarOpen(false)}
+              className="hidden md:flex items-center gap-1 px-2 py-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg text-xs font-bold transition-colors cursor-pointer border border-slate-200 shadow-2xs"
+              title="Ocultar Directorio (Ver semana completa con Sábados)"
+            >
+              <PanelRightClose className="w-3.5 h-3.5 text-slate-500" />
+              <span>Ocultar</span>
+            </button>
+          </div>
         </div>
 
         {/* Search */}

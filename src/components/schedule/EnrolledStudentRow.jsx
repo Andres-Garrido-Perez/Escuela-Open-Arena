@@ -16,6 +16,7 @@ export const EnrolledStudentRow = ({
   enrollmentNote,
   dayOfWeek,
   isBaja = false,
+  isReorganizing = false,
   onUnenroll,
 }) => {
   if (!student) return null;
@@ -138,28 +139,30 @@ export const EnrolledStudentRow = ({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-1 shrink-0">
-        {student.phone && (
-          <a
-            href={`https://wa.me/${student.phone.replace(/[^0-9]/g, '')}`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-emerald-600 sm:text-slate-300 sm:hover:text-emerald-600 p-1 rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-            title={`WhatsApp: ${student.phone}`}
-          >
-            <Phone className="w-3.5 h-3.5" />
-          </a>
-        )}
+      {!isReorganizing && (
+        <div className="flex items-center gap-1 shrink-0">
+          {student.phone && (
+            <a
+              href={`https://wa.me/${student.phone.replace(/[^0-9]/g, '')}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-emerald-600 sm:text-slate-300 sm:hover:text-emerald-600 p-1 rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+              title={`WhatsApp: ${student.phone}`}
+            >
+              <Phone className="w-3.5 h-3.5" />
+            </a>
+          )}
 
-        <button
-          type="button"
-          onClick={() => onUnenroll(student.id)}
-          className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1 rounded-md transition-all cursor-pointer"
-          title="Desinscribir de esta clase"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => onUnenroll(student.id)}
+            className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1 rounded-md transition-all cursor-pointer"
+            title="Desinscribir de esta clase"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

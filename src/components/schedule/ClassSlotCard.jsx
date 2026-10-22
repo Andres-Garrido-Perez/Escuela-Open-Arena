@@ -7,7 +7,7 @@ import { useSchool } from '../../context/SchoolContext';
 import { useCoaches } from '../../hooks/useCoaches';
 import { useTariffs } from '../../hooks/useTariffs';
 import { ProfitabilitySlotBadge } from './ProfitabilitySlotBadge';
-import { Edit2, Trash2, MapPin } from 'lucide-react';
+import { Edit2, Trash2, MapPin, GripVertical } from 'lucide-react';
 
 export const ClassSlotCard = ({
   slot,
@@ -18,12 +18,15 @@ export const ClassSlotCard = ({
   onUnenroll,
   onEditSlot,
   onDeleteSlot,
+  isReorganizing: propIsReorganizing,
+  isDragging = false,
 }) => {
   const { isStudentBaja } = useMonthlyRegistry();
-  const { showProfitability } = useSchool();
+  const { showProfitability, isReorganizing: contextIsReorganizing } = useSchool();
   const { filteredCoaches } = useCoaches();
   const { tariffs } = useTariffs();
 
+  const isReorganizing = propIsReorganizing ?? contextIsReorganizing;
 
   // Find enrolled students objects
   const enrolledStudents = enrollments
@@ -67,15 +70,28 @@ export const ClassSlotCard = ({
   const timeDisplay = `${(slot.start_time || '').slice(0, 5)} - ${(slot.end_time || '').slice(0, 5)}`;
 
   return (
-    <div className="group/card bg-white rounded-xl border border-slate-200/90 shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-150 p-3 flex flex-col justify-between">
-      {/* Header */}
-      <div>
+    <div
+      className={`group/card bg-white rounded-xl transition-all duration-150 p-3 flex flex-col justify-between ${
+        isDragging
+          ? 'ring-2 ring-[#0055A5] border-[#0055A5] shadow-lg opacity-40'
+          : isReorganizing
+          ? 'border-blue-300 ring-1 ring-blue-300/80 shadow-xs hover:border-[#0055A5] hover:ring-2 hover:ring-blue-400/40 select-none'
+          : 'border border-slate-200/90 shadow-xs hover:shadow-md hover:border-slate-300'
+      }`}
+    >
+      {/* Wrapper that disables pointer clicks during reorganizing mode so the whole card drags */}
+      <div className={isReorganizing ? 'pointer-events-none select-none' : ''}>
+        {/* Header */}
         <div className="flex items-start justify-between gap-1 mb-1.5">
-          {/* Time & Court */}
+          {/* Time, Drag Grip & Court */}
           <div className="flex items-center gap-1.5 flex-wrap">
+            {isReorganizing && (
+              <GripVertical className="w-4 h-4 text-[#0055A5] shrink-0" />
+            )}
             <span className="text-xs font-black text-slate-800 tracking-tight">
               {timeDisplay}
             </span>
+
             {slot.court_name && (
               <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                 <MapPin className="w-2.5 h-2.5 text-slate-400" />
@@ -84,25 +100,31 @@ export const ClassSlotCard = ({
             )}
           </div>
 
-          {/* Action buttons (Edit / Delete) */}
-          <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity">
-            <button
-              type="button"
-              onClick={() => onEditSlot(slot)}
-              className="p-1.5 text-slate-400 hover:text-[#0055A5] hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
-              title="Editar clase"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onDeleteSlot(slot.id)}
-              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
-              title="Eliminar clase"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          {/* Action buttons (Edit / Delete) in normal mode, or Mover badge in reorganize mode */}
+          {isReorganizing ? (
+            <span className="text-[10px] font-black uppercase tracking-wider text-[#0055A5] bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-2xs">
+              Mover
+            </span>
+          ) : (
+            <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity">
+              <button
+                type="button"
+                onClick={() => onEditSlot?.(slot)}
+                className="p-1.5 text-slate-400 hover:text-[#0055A5] hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
+                title="Editar clase"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onDeleteSlot?.(slot.id)}
+                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
+                title="Eliminar clase"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Level and Capacity Semaphore Bar */}
@@ -155,7 +177,8 @@ export const ClassSlotCard = ({
                   enrollmentNote={enrollmentNote}
                   dayOfWeek={slot.day_of_week}
                   isBaja={isBaja}
-                  onUnenroll={() => onUnenroll(slot.id, student.id)}
+                  isReorganizing={isReorganizing}
+                  onUnenroll={() => onUnenroll?.(slot.id, student.id)}
                 />
               ))}
 
@@ -166,30 +189,31 @@ export const ClassSlotCard = ({
               )}
             </div>
 
-            {/* Quick Enroll Footer */}
-            <QuickEnrollInput
-              classSlot={slot}
-              availableStudents={allStudents}
-              alreadyEnrolledIds={enrolledStudents.map((e) => e.student.id)}
-              onEnrollExisting={(studentId, alsoAddPairDay) =>
-                onEnrollExisting({
-                  classSlotId: slot.id,
-                  studentId,
-                  alsoAddPairDay,
-                })
-              }
-              onCreateAndEnroll={(fullName, alsoAddPairDay) =>
-                onCreateAndEnroll({
-                  classSlotId: slot.id,
-                  fullName,
-                  alsoAddPairDay,
-                })
-              }
-            />
+            {/* Quick Enroll Footer (hidden in reorganize mode) */}
+            {!isReorganizing && (
+              <QuickEnrollInput
+                classSlot={slot}
+                availableStudents={allStudents}
+                alreadyEnrolledIds={enrolledStudents.map((e) => e.student.id)}
+                onEnrollExisting={(studentId, alsoAddPairDay) =>
+                  onEnrollExisting?.({
+                    classSlotId: slot.id,
+                    studentId,
+                    alsoAddPairDay,
+                  })
+                }
+                onCreateAndEnroll={(fullName, alsoAddPairDay) =>
+                  onCreateAndEnroll?.({
+                    classSlotId: slot.id,
+                    fullName,
+                    alsoAddPairDay,
+                  })
+                }
+              />
+            )}
           </>
         )}
       </div>
     </div>
   );
 };
-

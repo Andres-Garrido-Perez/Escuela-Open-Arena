@@ -147,6 +147,36 @@ export const useSchedule = () => {
     }
   };
 
+  // Batch update class slots (for drag & drop live reordering)
+  const batchUpdateClassSlots = async (slotUpdates) => {
+    if (!slotUpdates || slotUpdates.length === 0) return;
+
+    const previous = [...slots];
+    setSlots((prev) =>
+      prev.map((s) => {
+        const update = slotUpdates.find((u) => u.id === s.id);
+        return update ? { ...s, ...update } : s;
+      })
+    );
+
+    try {
+      await Promise.all(
+        slotUpdates.map(({ id, ...patch }) =>
+          supabase
+            .from('class_slots')
+            .update(patch)
+            .eq('id', id)
+            .eq('admin_id', adminId)
+        )
+      );
+      if (triggerRefresh) triggerRefresh();
+    } catch (err) {
+      console.error('Error batch updating class slots:', err);
+      setSlots(previous);
+      throw err;
+    }
+  };
+
   // Delete class slot
   const deleteClassSlot = async (slotId) => {
     const prevSlots = [...slots];
@@ -527,6 +557,7 @@ export const useSchedule = () => {
     error,
     addClassSlot,
     updateClassSlot,
+    batchUpdateClassSlots,
     deleteClassSlot,
     enrollStudent,
     unenrollStudent,
