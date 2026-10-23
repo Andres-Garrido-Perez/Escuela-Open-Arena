@@ -3,6 +3,8 @@ import { Badge } from '../ui/Badge';
 import { useMonthlyRegistry } from '../../hooks/useMonthlyRegistry';
 import { useSchool } from '../../context/SchoolContext';
 import { Phone, Edit2, Trash2, AlertTriangle, UserX, UserCheck } from 'lucide-react';
+import { format, parse } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 export const StudentCard = ({
   student,
@@ -11,12 +13,23 @@ export const StudentCard = ({
   onDelete,
 }) => {
   const { selectedMonth } = useSchool();
-  const { isStudentBaja, toggleBajaTemporal } = useMonthlyRegistry();
+  const { isStudentBaja, toggleBajaTemporal, getStudentRegistry } = useMonthlyRegistry();
 
+  const registry = getStudentRegistry(student.id);
   const isBaja = isStudentBaja(student.id);
   const isPrueba = student.status === 'pendiente_aprobacion' || student.status === 'confirmado_prueba';
 
   const cleanPhone = student.phone ? student.phone.replace(/[^0-9]/g, '') : '';
+
+  const formatMonthShort = (monthStr) => {
+    if (!monthStr) return '';
+    try {
+      const parsed = parse(monthStr, 'yyyy-MM', new Date(2026, 0, 1));
+      return format(parsed, 'MMM yyyy', { locale: es });
+    } catch {
+      return monthStr;
+    }
+  };
 
   return (
     <div
@@ -35,9 +48,9 @@ export const StudentCard = ({
             <span
               className={`font-black truncate text-sm tracking-tight ${
                 isBaja
-                  ? 'text-slate-500 line-through'
+                  ? 'text-slate-900 font-bold'
                   : isPrueba
-                  ? 'text-amber-600'
+                  ? 'text-amber-600 font-bold'
                   : 'text-slate-900'
               }`}
             >
@@ -147,7 +160,9 @@ export const StudentCard = ({
           {isBaja ? (
             <>
               <UserX className="w-3 h-3 text-amber-700" />
-              <span>Baja Temporal</span>
+              <span>
+                Baja{registry?.inheritedFromMonth ? ` (desde ${formatMonthShort(registry.inheritedFromMonth)})` : ' Temporal'}
+              </span>
             </>
           ) : (
             <>

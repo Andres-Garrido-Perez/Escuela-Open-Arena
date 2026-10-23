@@ -148,14 +148,6 @@ export const ClassSlotCard = ({
           </Badge>
         </div>
 
-        {/* Notice if any student has Baja Temporal in this class */}
-        {bajasCount > 0 && !showProfitability && (
-          <div className="mb-2 px-1.5 py-0.5 bg-amber-50/80 border border-amber-200/80 rounded text-[10px] text-amber-800 flex items-center justify-between">
-            <span>{bajasCount} {bajasCount === 1 ? 'plaza liberada por baja' : 'plazas liberadas por baja'}</span>
-            <span className="font-bold text-amber-900">+Suplente</span>
-          </div>
-        )}
-
         {/* Si Vista Rentabilidad está activa, sustituye la lista por ProfitabilitySlotBadge */}
         {showProfitability ? (
           <ProfitabilitySlotBadge

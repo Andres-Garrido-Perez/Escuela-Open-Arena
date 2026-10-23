@@ -111,8 +111,16 @@ export const WeeklyGrid = () => {
   const [mobileDay, setMobileDay] = useState(todayDayIndex);
   const [mobileViewMode, setMobileViewMode] = useState('single'); // 'single' | 'full'
 
-  // Sábado siempre forma parte de los días de la semana
-  const daysToRender = ALL_DAYS;
+  // Si el directorio de alumnos está abierto, solo se muestran 5 días (Lunes a Viernes) para evitar que se vea apretado.
+  // Si el directorio se oculta, se expande a los 6 días incluyendo el Sábado.
+  const daysToRender = isStudentsSidebarOpen ? ALL_DAYS.slice(0, 5) : ALL_DAYS;
+
+  // Si se abre el directorio y el día seleccionado en móvil era sábado, ajustar a viernes
+  useEffect(() => {
+    if (isStudentsSidebarOpen && mobileDay === 6) {
+      setMobileDay(5);
+    }
+  }, [isStudentsSidebarOpen, mobileDay]);
 
   // Configuración de sensores para @dnd-kit: arrastre ultrasensible al pulsar en la tarjeta
   const sensors = useSensors(

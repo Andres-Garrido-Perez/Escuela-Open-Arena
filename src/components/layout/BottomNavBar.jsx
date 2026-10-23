@@ -6,6 +6,7 @@ import {
   Calendar,
   Users,
   CreditCard,
+  Layers,
   MoreHorizontal,
   X,
   Zap,
@@ -157,19 +158,21 @@ export const BottomNavBar = () => {
             type="button"
             onClick={() => setMenuOpen(!menuOpen)}
             className={`flex flex-col items-center justify-center py-1 rounded-xl transition-all ${
-              menuOpen
+              menuOpen || activeView === 'tarifas'
                 ? 'text-[#0055A5] font-bold'
                 : 'text-slate-500 hover:text-slate-900 font-medium'
             }`}
           >
             <div
               className={`p-1 rounded-lg transition-colors ${
-                menuOpen ? 'bg-blue-50 text-[#0055A5]' : ''
+                menuOpen || activeView === 'tarifas' ? 'bg-blue-50 text-[#0055A5]' : ''
               }`}
             >
               <MoreHorizontal className="w-5 h-5" />
             </div>
-            <span className="text-[10px] mt-0.5 tracking-tight">Más</span>
+            <span className="text-[10px] mt-0.5 tracking-tight">
+              {activeView === 'tarifas' ? 'Tarifas' : 'Más'}
+            </span>
           </button>
         </div>
       </nav>
@@ -244,6 +247,37 @@ export const BottomNavBar = () => {
                   <span>Escuela de Pádel</span>
                 </button>
               </div>
+            </div>
+
+            {/* Acceso a Clases & Tarifas */}
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveView('tarifas');
+                  setMenuOpen(false);
+                }}
+                className={`w-full p-3.5 rounded-2xl flex items-center justify-between border transition-all cursor-pointer ${
+                  activeView === 'tarifas'
+                    ? 'bg-blue-50 border-[#0055A5] text-[#0055A5]'
+                    : 'bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-blue-100/80 flex items-center justify-center text-[#0055A5]">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <div className="text-left">
+                    <span className="text-xs font-bold block">
+                      Gestionar Clases & Tarifas
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Editar precios, nombres y añadir opciones de 3h o 4h
+                    </span>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400" />
+              </button>
             </div>
 
             {/* Mes de Trabajo */}

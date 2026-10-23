@@ -26,7 +26,7 @@ export const Badge = ({
     gray: 'bg-slate-100 text-slate-600 border border-slate-200',
     dark: 'bg-slate-800 text-slate-200 border border-slate-700',
     purple: 'bg-purple-50 text-purple-700 border border-purple-200',
-    baja: 'bg-slate-200 text-slate-700 border border-slate-300 font-bold',
+    baja: 'bg-rose-50 text-rose-700 border border-rose-200 font-bold',
   };
 
   const sizes = {

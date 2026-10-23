@@ -4,6 +4,7 @@ import { CoachTabsBar } from '../coaches/CoachTabsBar';
 import { WeeklyGrid } from '../schedule/WeeklyGrid';
 import { StudentsSidebar } from '../students/StudentsSidebar';
 import { MonthlyBillingTable } from '../billing/MonthlyBillingTable';
+import { TariffsView } from '../tariffs/TariffsView';
 import { Users } from 'lucide-react';
 
 export const MainWorkspace = () => {
@@ -57,6 +58,11 @@ export const MainWorkspace = () => {
             </button>
           )}
         </div>
+      ) : activeView === 'tarifas' ? (
+        /* Vista de Clases & Tarifas de la Escuela */
+        <div className="flex-1 flex min-h-0 overflow-hidden">
+          <TariffsView />
+        </div>
       ) : (
         /* Vista de Facturación y Recibos Mensuales */
         <div className="flex-1 flex min-h-0 overflow-hidden">
@@ -66,4 +72,3 @@ export const MainWorkspace = () => {
     </main>
   );
 };
-

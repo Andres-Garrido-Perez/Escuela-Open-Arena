@@ -63,7 +63,7 @@ export const EnrolledStudentRow = ({
     <div
       className={`group flex items-center justify-between py-1.5 px-2 rounded-lg transition-colors text-xs border ${
         isBaja
-          ? 'bg-slate-100/90 border-slate-200 text-slate-400'
+          ? 'bg-rose-50/20 border-rose-100 text-slate-800'
           : isPrueba
           ? 'bg-amber-50/50 hover:bg-amber-50/80 border-amber-300/80 text-amber-950 shadow-2xs'
           : 'bg-white hover:bg-slate-50 border-slate-150 text-slate-800'
@@ -71,11 +71,11 @@ export const EnrolledStudentRow = ({
     >
       {/* Student Details */}
       <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-1">
-        {/* Full Name & Strikethrough if Baja / Orange if Prueba */}
+        {/* Full Name & Orange if Prueba */}
         <span
           className={`truncate ${
             isBaja
-              ? 'line-through text-slate-400 italic font-medium'
+              ? 'text-slate-800 font-semibold'
               : isPrueba
               ? 'text-amber-600 font-bold'
               : 'text-slate-800 font-semibold'
@@ -85,18 +85,17 @@ export const EnrolledStudentRow = ({
           {student.full_name}
         </span>
 
-        {/* Badge "Prueba" (Vital para el monitor) */}
+        {/* Badge "Prueba" (Sin icono) */}
         {isPrueba && !isBaja && (
           <span
-            className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded-full shrink-0 shadow-2xs"
+            className="inline-flex items-center text-[9px] font-black uppercase text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded-full shrink-0 shadow-2xs"
             title="Alumno en prueba (Pendiente de Aprobación)"
           >
-            <Sparkles className="w-2.5 h-2.5 text-amber-600" />
             Prueba
           </span>
         )}
 
-        {/* Baja Temporal Tag */}
+        {/* Baja Temporal Tag en Rojo */}
         {isBaja && (
           <Badge
             variant="baja"

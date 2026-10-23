@@ -115,6 +115,7 @@ export const MonthlyBillingTable = () => {
           tariff,
           status,
           price,
+          registry,
           notes: registry?.notes || '',
         };
 
@@ -130,6 +131,16 @@ export const MonthlyBillingTable = () => {
         totalBajas: bajas,
       };
     }, [filteredStudents, registryMap, tariffsById]);
+
+  const formatMonthShort = (monthStr) => {
+    if (!monthStr) return '';
+    try {
+      const parsed = parse(monthStr, 'yyyy-MM', new Date(2026, 0, 1));
+      return format(parsed, 'MMM yyyy', { locale: es });
+    } catch {
+      return monthStr;
+    }
+  };
 
   // Calculate coach breakdown & profitability ALWAYS across ALL slots
   const {
@@ -666,7 +677,7 @@ export const MonthlyBillingTable = () => {
 
         {/* MOBILE VIEW: Touch-friendly Student Cards (Visible on < md) */}
         <div className="md:hidden divide-y divide-slate-100 p-2 sm:p-3 space-y-2.5">
-          {filteredRows.map(({ student, tariff, status, price }) => {
+          {filteredRows.map(({ student, tariff, status, price, registry }) => {
             const isBaja = status === 'baja_temporal';
             const cleanPhone = student.phone ? student.phone.replace(/[^0-9]/g, '') : '';
             const isPrueba = student.status === 'pendiente_aprobacion';
@@ -685,9 +696,7 @@ export const MonthlyBillingTable = () => {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span
-                        className={`font-black text-sm tracking-tight ${
-                          isBaja ? 'line-through text-slate-400' : 'text-slate-900'
-                        }`}
+                        className={`font-black text-sm tracking-tight text-slate-900`}
                       >
                         {student.full_name}
                       </span>
@@ -738,10 +747,17 @@ export const MonthlyBillingTable = () => {
                 <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
                   <div>
                     {isBaja ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-200 text-slate-700 border border-slate-300">
-                        <UserX className="w-3 h-3 text-slate-600" />
-                        <span>Baja</span>
-                      </span>
+                      <div className="flex flex-col items-start gap-0.5">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-200 text-slate-700 border border-slate-300">
+                          <UserX className="w-3 h-3 text-slate-600" />
+                          <span>Baja</span>
+                        </span>
+                        {registry?.inheritedFromMonth && (
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            Desde {formatMonthShort(registry.inheritedFromMonth)}
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       <div className="flex items-center gap-1 flex-wrap">
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
@@ -826,7 +842,7 @@ export const MonthlyBillingTable = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredRows.map(({ student, tariff, status, price }) => {
+              {filteredRows.map(({ student, tariff, status, price, registry }) => {
                 const isBaja = status === 'baja_temporal';
                 const isPrueba = student.status === 'pendiente_aprobacion';
 
@@ -840,11 +856,7 @@ export const MonthlyBillingTable = () => {
                     {/* Alumno */}
                     <td className="py-3 px-4 font-bold text-slate-800">
                       <div className="flex items-center gap-1.5">
-                        <span
-                          className={
-                            isBaja ? 'line-through text-slate-400' : ''
-                          }
-                        >
+                        <span>
                           {student.full_name}
                         </span>
                         {isBaja && (
@@ -894,10 +906,17 @@ export const MonthlyBillingTable = () => {
                     {/* Estado Badge (Activo / Baja Temporal) */}
                     <td className="py-3 px-4">
                       {isBaja ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-700 border border-slate-300">
-                          <UserX className="w-3.5 h-3.5 text-slate-600" />
-                          <span>Baja Temporal</span>
-                        </span>
+                        <div className="flex flex-col items-start gap-0.5">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-700 border border-slate-300">
+                            <UserX className="w-3.5 h-3.5 text-slate-600" />
+                            <span>Baja Temporal</span>
+                          </span>
+                          {registry?.inheritedFromMonth && (
+                            <span className="text-[10px] text-slate-400 font-medium pl-1">
+                              Desde {formatMonthShort(registry.inheritedFromMonth)}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">

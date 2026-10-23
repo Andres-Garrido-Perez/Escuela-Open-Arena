@@ -6,6 +6,7 @@ import { Switch } from '../ui/Switch';
 import {
   Calendar,
   CreditCard,
+  Layers,
   Zap,
   LogOut,
   ChevronLeft,
@@ -140,6 +141,18 @@ export const TopNavbar = () => {
             >
               <CreditCard className="w-3.5 h-3.5" />
               <span>Facturación & Alumnos</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('tarifas')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeView === 'tarifas'
+                  ? 'bg-white text-[#0055A5] shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Clases & Tarifas</span>
             </button>
           </div>
 

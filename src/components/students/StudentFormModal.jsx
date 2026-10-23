@@ -463,6 +463,23 @@ export const StudentFormModal = ({
           </div>
         </div>
 
+        {/* ¿Es Abonado de OpenArena? */}
+        <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+          <div>
+            <span className="text-xs font-bold text-slate-800 block">
+              ¿Es Abonado del Club?
+            </span>
+            <span className="text-[11px] text-slate-500">
+              Aplica automáticamente la tarifa reducida de abonado
+            </span>
+          </div>
+          <Switch
+            checked={isMember}
+            onChange={setIsMember}
+            size="sm"
+          />
+        </div>
+
         {/* Estado del Alumno (Regular vs Prueba en Naranja) */}
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1">
