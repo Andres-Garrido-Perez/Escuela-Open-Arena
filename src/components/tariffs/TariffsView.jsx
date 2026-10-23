@@ -203,7 +203,7 @@ export const TariffsView = () => {
               No se encontraron clases para {isTenis ? 'Tenis' : 'Pádel'}
             </h3>
             <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-              Prueba a cambiar el filtro de horas o pulsa en Nueva Clase para crear una.
+              Prueba a cambiar la búsqueda o pulsa en Nueva Clase para crear una.
             </p>
             <div className="mt-5">
               <Button variant="primary" size="sm" onClick={handleOpenCreate} icon={Plus}>
