@@ -7,6 +7,7 @@ import { MainWorkspace } from './components/layout/MainWorkspace';
 import { SportSelectorView } from './components/sport-selector/SportSelectorView';
 
 import { BottomNavBar } from './components/layout/BottomNavBar';
+import { ProfitabilityPasswordModal } from './components/profitability/ProfitabilityPasswordModal';
 
 const AppContent = () => {
   const { session, loading } = useAuth();
@@ -42,6 +43,7 @@ const AppContent = () => {
       <TopNavbar />
       <MainWorkspace />
       <BottomNavBar />
+      <ProfitabilityPasswordModal />
     </div>
   );
 };

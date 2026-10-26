@@ -12,6 +12,8 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
+  Lock,
+  TrendingUp,
 } from 'lucide-react';
 import { format, parse, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -26,7 +28,7 @@ export const TopNavbar = () => {
     activeView,
     setActiveView,
     showProfitability,
-    setShowProfitability,
+    toggleProfitability,
     seedSchoolData,
     isSeeding,
   } = useSchool();
@@ -179,17 +181,37 @@ export const TopNavbar = () => {
             </button>
           </div>
 
-          {/* Switch Vista Rentabilidad (Desktop) */}
-          {(activeView === 'cuadrante' || activeView === 'alumnos') && (
-            <div className="hidden lg:flex items-center bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 shadow-xs">
-              <Switch
-                checked={showProfitability}
-                onChange={setShowProfitability}
-                label="📊 Vista Rentabilidad"
-                size="sm"
-              />
-            </div>
-          )}
+          {/* Botón Vista Rentabilidad (Siempre visible) */}
+          <button
+            type="button"
+            onClick={toggleProfitability}
+            className={`hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shadow-2xs cursor-pointer ${
+              showProfitability
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100/80 shadow-xs'
+                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+            title={
+              showProfitability
+                ? 'Vista Rentabilidad activada. Haz clic para bloquearla u ocultarla.'
+                : 'Desbloquear Vista Rentabilidad (requiere contraseña).'
+            }
+          >
+            {showProfitability ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Vista Rentabilidad</span>
+                <span className="text-[10px] bg-emerald-200/60 text-emerald-900 px-1.5 py-0.2 rounded-md font-extrabold ml-0.5">
+                  ON
+                </span>
+              </>
+            ) : (
+              <>
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                <span>Vista Rentabilidad</span>
+              </>
+            )}
+          </button>
         </div>
 
         {/* Right: Seed Button & User / Logout (Desktop md+) */}

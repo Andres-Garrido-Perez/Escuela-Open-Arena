@@ -25,20 +25,19 @@ import {
   Lock,
   Edit2,
   History,
+  AlertCircle,
 } from 'lucide-react';
 import { format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 export const MonthlyBillingTable = () => {
-  const { selectedMonth, sport } = useSchool();
+  const { selectedMonth, sport, showProfitability, toggleProfitability } = useSchool();
   const { filteredStudents, updateStudent } = useStudents();
   const { tariffs } = useTariffs();
   const { filteredCoaches, updateCoach } = useCoaches();
   const { allSlots, slots, enrollments } = useSchedule();
   const { registryMap, setStudentStatus } = useMonthlyRegistry();
-  const { isMonthClosed, closeMonth } = useMonthlyClosures();
-
-  const isClosed = isMonthClosed(selectedMonth);
+  const { isMonthClosed, getClosuresForMonth, closeMonth } = useMonthlyClosures();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('todos');
@@ -262,6 +261,65 @@ export const MonthlyBillingTable = () => {
       };
     }, [allSlots, slots, enrollments, filteredCoaches, rowsByStudentId, totalRecaudado]);
 
+  // Detección inteligente de si el mes está cerrado y si han ocurrido cambios desde el cierre
+  const { isClosed, hasPendingChanges } = useMemo(() => {
+    const monthClosures = getClosuresForMonth(selectedMonth);
+    if (!monthClosures || monthClosures.length === 0) {
+      return { isClosed: false, hasPendingChanges: false };
+    }
+
+    const savedByCoach = {};
+    monthClosures.forEach((c) => {
+      savedByCoach[c.coach_id] = {
+        revenue: Number(c.total_revenue || 0),
+        cost: Number(c.coach_cost || 0),
+        profit: Number(c.net_profit || 0),
+      };
+    });
+
+    const liveCoaches = coachesBreakdown || [];
+    let changed = false;
+
+    for (const item of liveCoaches) {
+      const coachId = item.coach?.id || item.coach_id;
+      const saved = savedByCoach[coachId];
+      const currentRevenue = Number((item.gross_revenue ?? item.total_revenue ?? 0).toFixed(2));
+      const currentCost = Number((item.coach_cost ?? 0).toFixed(2));
+      const currentProfit = Number((item.net_margin ?? item.net_profit ?? 0).toFixed(2));
+
+      if (!saved) {
+        if (currentRevenue > 0.05 || currentCost > 0.05) {
+          changed = true;
+          break;
+        }
+      } else {
+        if (
+          Math.abs(currentRevenue - saved.revenue) > 0.05 ||
+          Math.abs(currentCost - saved.cost) > 0.05 ||
+          Math.abs(currentProfit - saved.profit) > 0.05
+        ) {
+          changed = true;
+          break;
+        }
+      }
+    }
+
+    if (!changed) {
+      for (const coachId of Object.keys(savedByCoach)) {
+        const saved = savedByCoach[coachId];
+        const live = liveCoaches.find((item) => (item.coach?.id || item.coach_id) === coachId);
+        if (!live) {
+          if (saved.revenue > 0.05 || saved.cost > 0.05) {
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+
+    return { isClosed: true, hasPendingChanges: changed };
+  }, [getClosuresForMonth, selectedMonth, coachesBreakdown]);
+
 
 
   const query = search.trim().toLowerCase();
@@ -292,167 +350,246 @@ export const MonthlyBillingTable = () => {
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight capitalize m-0">
-              Facturación & Alumnos — {formattedMonth}
+            <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight capitalize m-0 flex items-center gap-2">
+              <span>{showProfitability ? 'Facturación & Alumnos' : 'Directorio de Alumnos'} — {formattedMonth}</span>
+              {showProfitability && (
+                <span className="text-[10px] font-extrabold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
+                  Rentabilidad Activa
+                </span>
+              )}
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Gestión de alumnos, control de bajas temporales y cálculo de rentabilidad en escuela de {sport === 'tenis' ? 'Tenis' : 'Pádel'}.
+              {showProfitability
+                ? `Gestión de alumnos, cálculo de rentabilidad y desglose por monitor en escuela de ${sport === 'tenis' ? 'Tenis' : 'Pádel'}.`
+                : `Gestión de alumnos, asistencias y control de bajas temporales en escuela de ${sport === 'tenis' ? 'Tenis' : 'Pádel'}.`}
             </p>
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-            {/* Botón Cerrar Mes */}
-            <button
-              type="button"
-              onClick={() => setCloseModalOpen(true)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
-                isClosed
-                  ? 'bg-slate-900 text-white hover:bg-slate-800'
-                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
-              }`}
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span>
-                {isClosed
-                  ? ' Mes Cerrado (Actualizar)'
-                  : ' Cerrar Mes y Guardar Histórico'}
-              </span>
-            </button>
+            {/* Opciones financieras solo visibles cuando Rentabilidad está desbloqueada */}
+            {showProfitability && (
+              <>
+                {/* Botón Cerrar Mes */}
+                <button
+                  type="button"
+                  onClick={() => setCloseModalOpen(true)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                    !isClosed
+                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                      : hasPendingChanges
+                      ? 'bg-slate-900 text-amber-300 border border-amber-400 hover:bg-slate-800'
+                      : 'bg-slate-900 text-white hover:bg-slate-800'
+                  }`}
+                  title={
+                    !isClosed
+                      ? 'Congelar y guardar en el histórico los beneficios de este mes'
+                      : hasPendingChanges
+                      ? 'Se detectaron modificaciones contables respecto al cierre guardado. Haz clic para actualizar el histórico.'
+                      : 'El mes está cerrado y al día con el histórico congelado'
+                  }
+                >
+                  {!isClosed ? (
+                    <>
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Cerrar Mes y Guardar Histórico</span>
+                    </>
+                  ) : hasPendingChanges ? (
+                    <>
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                      <span>Mes Cerrado (Actualizar cambios)</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Mes Cerrado</span>
+                    </>
+                  )}
+                </button>
 
-            {/* Toggle Histórico de Beneficios */}
-            <button
-              type="button"
-              onClick={() => setShowHistory(!showHistory)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all shadow-xs cursor-pointer ${
-                showHistory
-                  ? 'bg-slate-800 text-white border-slate-800'
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              <History className="w-3.5 h-3.5 text-[#0055A5]" />
-              <span>{showHistory ? 'Ocultar Histórico' : 'Histórico Beneficios'}</span>
-            </button>
-
-            {/* Toggle Rentabilidad */}
-            <button
-              type="button"
-              onClick={() => setShowCoachesBreakdown(!showCoachesBreakdown)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer"
-            >
-              <Briefcase className="w-3.5 h-3.5 text-[#0055A5]" />
-              <span>
-                {showCoachesBreakdown
-                  ? 'Ocultar Rentabilidad'
-                  : 'Ver Rentabilidad'}
-              </span>
-              {showCoachesBreakdown ? (
-                <ChevronUp className="w-3.5 h-3.5" />
-              ) : (
-                <ChevronDown className="w-3.5 h-3.5" />
-              )}
-            </button>
+                {/* Botón Histórico de Beneficios */}
+                <button
+                  type="button"
+                  onClick={() => setShowHistory(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all shadow-xs cursor-pointer bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                  title="Ver histórico de meses cerrados y beneficios pasados"
+                >
+                  <History className="w-3.5 h-3.5 text-[#0055A5]" />
+                  <span>Histórico Beneficios</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Global Summary Cards: 2 cols on mobile, 5 on desktop */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3">
-          {/* Total Alumnos */}
-          <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between text-slate-400 mb-1">
-              <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Alumnos Totales
+        {/* Global Summary Cards: Condicional a showProfitability */}
+        {showProfitability ? (
+          /* Vista Rentabilidad Desbloqueada: 5 métricas financieras */
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3">
+            {/* Total Alumnos */}
+            <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="flex items-center justify-between text-slate-400 mb-1">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Alumnos Totales
+                </span>
+                <Users className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-[#0055A5]" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-slate-900">
+                {filteredStudents.length}
+              </div>
+              <span className="text-[9px] sm:text-[10px] text-slate-400">
+                Escuela de {sport}
               </span>
-              <Users className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-[#0055A5]" />
             </div>
-            <div className="text-lg sm:text-xl font-black text-slate-900">
-              {filteredStudents.length}
-            </div>
-            <span className="text-[9px] sm:text-[10px] text-slate-400">
-              Escuela de {sport}
-            </span>
-          </div>
 
-          {/* Facturado / Pagado */}
-          <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-emerald-200/80 shadow-xs bg-emerald-50/20">
-            <div className="flex items-center justify-between text-emerald-600 mb-1">
-              <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
-                Recaudado Bruto
+            {/* Facturado / Pagado */}
+            <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-emerald-200/80 shadow-xs bg-emerald-50/20">
+              <div className="flex items-center justify-between text-emerald-600 mb-1">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
+                  Recaudado Bruto
+                </span>
+                <CheckCircle2 className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-emerald-600" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-emerald-700 truncate">
+                {totalRecaudado.toFixed(2)} €
+              </div>
+              <span className="text-[9px] sm:text-[10px] text-emerald-600 font-medium">
+                Con IVA incluido
               </span>
-              <CheckCircle2 className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-emerald-600" />
             </div>
-            <div className="text-lg sm:text-xl font-black text-emerald-700 truncate">
-              {totalRecaudado.toFixed(2)} €
-            </div>
-            <span className="text-[9px] sm:text-[10px] text-emerald-600 font-medium">
-              Con IVA incluido
-            </span>
-          </div>
 
-          {/* Facturación Neta (sin 21% IVA) */}
-          <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between text-slate-600 mb-1">
-              <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
-                Base Neta (-21%)
+            {/* Facturación Neta (sin 21% IVA) */}
+            <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="flex items-center justify-between text-slate-600 mb-1">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
+                  Base Neta (-21%)
+                </span>
+                <TrendingUp className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-slate-500" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-slate-900 truncate">
+                {totalRecaudadoNetoSinIva.toFixed(2)} €
+              </div>
+              <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium">
+                Ingreso real club
               </span>
-              <TrendingUp className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-slate-500" />
             </div>
-            <div className="text-lg sm:text-xl font-black text-slate-900 truncate">
-              {totalRecaudadoNetoSinIva.toFixed(2)} €
-            </div>
-            <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium">
-              Ingreso real club
-            </span>
-          </div>
 
-          {/* Coste Total Monitores */}
-          <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
-                Nómina Monitores
+            {/* Coste Total Monitores */}
+            <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 mb-1">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
+                  Nómina Monitores
+                </span>
+                <Briefcase className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-slate-500" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-slate-800 truncate">
+                -{totalCosteMonitores.toFixed(2)} €
+              </div>
+              <span className="text-[9px] sm:text-[10px] text-slate-400">
+                Coste mensual
               </span>
-              <Briefcase className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-slate-500" />
             </div>
-            <div className="text-lg sm:text-xl font-black text-slate-800 truncate">
-              -{totalCosteMonitores.toFixed(2)} €
-            </div>
-            <span className="text-[9px] sm:text-[10px] text-slate-400">
-              Coste mensual
-            </span>
-          </div>
 
-          {/* Beneficio Neto Escuela: Spans 2 cols on mobile */}
-          <div
-            className={`col-span-2 lg:col-span-1 p-3 sm:p-3.5 rounded-2xl border shadow-xs ${
-              totalBeneficioEscuela >= 0
-                ? 'bg-sky-50/50 border-sky-200'
-                : 'bg-rose-50/50 border-rose-200'
-            }`}
-          >
-            <div className="flex items-center justify-between text-[#0055A5] mb-1">
-              <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
-                Margen Neto Real Club
-              </span>
-              <TrendingUp className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-[#0055A5]" />
-            </div>
+            {/* Beneficio Neto Escuela: Spans 2 cols on mobile */}
             <div
-              className={`text-lg sm:text-xl font-black ${
+              className={`col-span-2 lg:col-span-1 p-3 sm:p-3.5 rounded-2xl border shadow-xs ${
                 totalBeneficioEscuela >= 0
-                  ? 'text-[#0055A5]'
-                  : 'text-rose-700'
+                  ? 'bg-sky-50/50 border-sky-200'
+                  : 'bg-rose-50/50 border-rose-200'
               }`}
             >
-              {totalBeneficioEscuela >= 0 ? '+' : ''}
-              {totalBeneficioEscuela.toFixed(2)} €
+              <div className="flex items-center justify-between text-[#0055A5] mb-1">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
+                  Margen Neto Real Club
+                </span>
+                <TrendingUp className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-[#0055A5]" />
+              </div>
+              <div
+                className={`text-lg sm:text-xl font-black ${
+                  totalBeneficioEscuela >= 0
+                    ? 'text-[#0055A5]'
+                    : 'text-rose-700'
+                }`}
+              >
+                {totalBeneficioEscuela >= 0 ? '+' : ''}
+                {totalBeneficioEscuela.toFixed(2)} €
+              </div>
+              <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium">
+                Base sin IVA - Nóminas
+              </span>
             </div>
-            <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium">
-              Base sin IVA - Nóminas
-            </span>
           </div>
-        </div>
+        ) : (
+          /* Vista Rentabilidad Bloqueada: Solo métricas de Alumnos */
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+            {/* Total Alumnos */}
+            <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="flex items-center justify-between text-slate-400 mb-1">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Total Alumnos
+                </span>
+                <Users className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-[#0055A5]" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-slate-900">
+                {filteredStudents.length}
+              </div>
+              <span className="text-[9px] sm:text-[10px] text-slate-400">
+                Inscritos en escuela de {sport}
+              </span>
+            </div>
+
+            {/* Alumnos Activos */}
+            <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-emerald-200/80 shadow-xs bg-emerald-50/20">
+              <div className="flex items-center justify-between text-emerald-600 mb-1">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
+                  Alumnos Activos
+                </span>
+                <CheckCircle2 className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-emerald-600" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-emerald-700">
+                {rows.filter((r) => r.status !== 'baja_temporal').length}
+              </div>
+              <span className="text-[9px] sm:text-[10px] text-emerald-600 font-medium">
+                En clases regulares
+              </span>
+            </div>
+
+            {/* Bajas Temporales */}
+            <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-rose-200/70 shadow-xs bg-rose-50/20">
+              <div className="flex items-center justify-between text-rose-600 mb-1">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
+                  Bajas Temporales
+                </span>
+                <UserX className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-rose-500" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-rose-700">
+                {totalBajas}
+              </div>
+              <span className="text-[9px] sm:text-[10px] text-rose-500 font-medium">
+                Mes de {formattedMonth}
+              </span>
+            </div>
+
+            {/* Alumnos en Prueba */}
+            <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-amber-200/70 shadow-xs bg-amber-50/20">
+              <div className="flex items-center justify-between text-amber-600 mb-1">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
+                  En Periodo de Prueba
+                </span>
+                <Clock className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-amber-500" />
+              </div>
+              <div className="text-lg sm:text-xl font-black text-amber-700">
+                {rows.filter((r) => r.student?.status === 'pendiente_aprobacion').length}
+              </div>
+              <span className="text-[9px] sm:text-[10px] text-amber-600 font-medium">
+                Pendientes de confirmación
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* SECTION: DESGLOSE DE RENTABILIDAD POR MONITOR */}
-      {showCoachesBreakdown && (
+      {showProfitability && showCoachesBreakdown && (
         <div className="mb-6 bg-white rounded-2xl border border-slate-200 shadow-xs p-5">
           <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
             <div>
@@ -620,10 +757,7 @@ export const MonthlyBillingTable = () => {
         </div>
       )}
 
-      {/* HISTÓRICO DE BENEFICIOS */}
-      {showHistory && (
-        <MonthlyClosuresHistory />
-      )}
+
 
       {/* TABLE CONTAINER: ALUMNOS BILLING TABLE */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
@@ -735,12 +869,14 @@ export const MonthlyBillingTable = () => {
                   </div>
 
                   {/* Monthly Amount */}
-                  <div className="text-right shrink-0">
-                    <span className="text-base font-black text-slate-900 block">
-                      {isBaja ? '0.00 €' : `${price.toFixed(2)} €`}
-                    </span>
-                    <span className="text-[10px] text-slate-400">mensual</span>
-                  </div>
+                  {showProfitability && (
+                    <div className="text-right shrink-0">
+                      <span className="text-base font-black text-slate-900 block">
+                        {isBaja ? '0.00 €' : `${price.toFixed(2)} €`}
+                      </span>
+                      <span className="text-[10px] text-slate-400">mensual</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Status Indicator & Quick Action Buttons */}
@@ -836,7 +972,7 @@ export const MonthlyBillingTable = () => {
                 <th className="py-3 px-4">Teléfono</th>
                 <th className="py-3 px-4">Abonado</th>
                 <th className="py-3 px-4">Tarifa / Plan</th>
-                <th className="py-3 px-4">Importe Mensual</th>
+                {showProfitability && <th className="py-3 px-4">Importe Mensual</th>}
                 <th className="py-3 px-4">Estado</th>
                 <th className="py-3 px-4 text-right">Acciones</th>
               </tr>
@@ -899,9 +1035,11 @@ export const MonthlyBillingTable = () => {
                     </td>
 
                     {/* Importe */}
-                    <td className="py-3 px-4 font-black text-slate-900">
-                      {isBaja ? '0.00 € (Baja)' : `${price.toFixed(2)} €`}
-                    </td>
+                    {showProfitability && (
+                      <td className="py-3 px-4 font-black text-slate-900">
+                        {isBaja ? '0.00 € (Baja)' : `${price.toFixed(2)} €`}
+                      </td>
+                    )}
 
                     {/* Estado Badge (Activo / Baja Temporal) */}
                     <td className="py-3 px-4">
@@ -993,6 +1131,12 @@ export const MonthlyBillingTable = () => {
         </div>
       </div>
 
+      {/* Modal Histórico de Beneficios */}
+      <MonthlyClosuresHistory
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
+      />
+
       {/* Modal Cierre Mensual */}
       <CloseMonthModal
         isOpen={closeModalOpen}
@@ -1004,6 +1148,7 @@ export const MonthlyBillingTable = () => {
         totalCosteMonitores={totalCosteMonitores}
         totalBeneficioEscuela={totalBeneficioEscuela}
         isAlreadyClosed={isClosed}
+        hasPendingChanges={hasPendingChanges}
         onConfirmClose={handleConfirmCloseMonth}
       />
 

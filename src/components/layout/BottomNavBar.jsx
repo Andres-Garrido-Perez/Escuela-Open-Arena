@@ -15,6 +15,7 @@ import {
   ChevronRight,
   TrendingUp,
   CheckCircle2,
+  Lock,
 } from 'lucide-react';
 import { Switch } from '../ui/Switch';
 import { Button } from '../ui/Button';
@@ -31,7 +32,7 @@ export const BottomNavBar = () => {
     selectedMonth,
     setSelectedMonth,
     showProfitability,
-    setShowProfitability,
+    toggleProfitability,
     seedSchoolData,
     isSeeding,
   } = useSchool();
@@ -309,23 +310,36 @@ export const BottomNavBar = () => {
             {/* Vista Rentabilidad */}
             <div className="mb-5 p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-sky-100 flex items-center justify-center text-[#0055A5]">
-                  <TrendingUp className="w-4 h-4" />
+                <div
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                    showProfitability ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
+                  }`}
+                >
+                  {showProfitability ? <TrendingUp className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                 </div>
                 <div>
                   <span className="text-xs font-bold text-slate-800 block">
                     Vista Rentabilidad
                   </span>
                   <span className="text-[11px] text-slate-400">
-                    Muestra márgenes en tarjetas de clase
+                    {showProfitability ? 'Márgenes y finanzas visibles' : 'Protegido con contraseña'}
                   </span>
                 </div>
               </div>
-              <Switch
-                checked={showProfitability}
-                onChange={setShowProfitability}
-                size="md"
-              />
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  toggleProfitability();
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs ${
+                  showProfitability
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    : 'bg-[#0055A5] text-white hover:bg-blue-700'
+                }`}
+              >
+                {showProfitability ? 'Desactivar' : 'Activar'}
+              </button>
             </div>
 
             {/* Inicializar datos */}

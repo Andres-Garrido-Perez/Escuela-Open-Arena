@@ -13,6 +13,7 @@ export const CloseMonthModal = ({
   totalCosteMonitores = 0,
   totalBeneficioEscuela = 0,
   isAlreadyClosed = false,
+  hasPendingChanges = false,
   onConfirmClose,
 }) => {
   const [loading, setLoading] = useState(false);
@@ -40,8 +41,20 @@ export const CloseMonthModal = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isAlreadyClosed ? 'Actualizar Cierre de Mes' : 'Cerrar Mes y Guardar Histórico'}
-      subtitle={`Congelar beneficios para ${formattedMonth} (${monthYear})`}
+      title={
+        !isAlreadyClosed
+          ? 'Cerrar Mes y Guardar Histórico'
+          : hasPendingChanges
+          ? 'Actualizar Cierre de Mes'
+          : 'Mes Ya Cerrado'
+      }
+      subtitle={
+        !isAlreadyClosed
+          ? `Congelar beneficios para ${formattedMonth} (${monthYear})`
+          : hasPendingChanges
+          ? `Se detectaron cambios en ${formattedMonth}. Pulsa para actualizar el histórico congelado.`
+          : `El histórico de ${formattedMonth} está al día con los datos actuales.`
+      }
       maxWidth="max-w-md"
     >
       <div className="space-y-4">
@@ -108,7 +121,11 @@ export const CloseMonthModal = ({
                 size="sm"
                 className="bg-slate-900 hover:bg-slate-800 text-white"
               >
-                {isAlreadyClosed ? 'Actualizar Cierre' : 'Confirmar y Congelar'}
+                {!isAlreadyClosed
+                  ? 'Confirmar y Congelar'
+                  : hasPendingChanges
+                  ? 'Actualizar Cierre'
+                  : 'Volver a Guardar'}
               </Button>
             </div>
           </>

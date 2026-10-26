@@ -2,6 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { useMonthlyClosures } from '../../hooks/useMonthlyClosures';
 import { useCoaches } from '../../hooks/useCoaches';
 import { Badge } from '../ui/Badge';
+import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
 import {
   Lock,
   ChevronDown,
@@ -15,7 +17,7 @@ import {
 import { format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-export const MonthlyClosuresHistory = () => {
+export const MonthlyClosuresHistory = ({ isOpen, onClose }) => {
   const { closures, loading } = useMonthlyClosures();
   const { coaches } = useCoaches();
   const [expandedMonths, setExpandedMonths] = useState({});
@@ -72,31 +74,60 @@ export const MonthlyClosuresHistory = () => {
   };
 
   if (loading && closures.length === 0) {
-    return (
+    const loadingEl = (
       <div className="bg-white rounded-2xl border border-slate-200 p-6 text-center text-slate-400 text-xs shadow-xs">
         Cargando histórico de beneficios...
       </div>
     );
+    if (isOpen !== undefined) {
+      return (
+        <Modal
+          isOpen={isOpen}
+          onClose={onClose}
+          title="Histórico de Beneficios y Cierres Mensuales"
+          subtitle="Registro inmutable de los márgenes y beneficios congelados al finalizar cada mes."
+          maxWidth="max-w-3xl"
+        >
+          {loadingEl}
+        </Modal>
+      );
+    }
+    return loadingEl;
   }
 
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 mb-6">
-      {/* Title */}
-      <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
-        <div>
-          <h2 className="text-sm font-black text-slate-800 uppercase tracking-tight m-0 flex items-center gap-2">
-            <History className="w-4 h-4 text-[#0055A5]" />
-            <span>Histórico de Beneficios y Cierres Mensuales</span>
-          </h2>
-          <p className="text-[11px] text-slate-500 mt-0.5">
-            Registro inmutable de los márgenes y beneficios congelados al finalizar cada mes.
-          </p>
+  const content = (
+    <div className={isOpen !== undefined ? 'space-y-4' : 'bg-white rounded-2xl border border-slate-200 shadow-xs p-5 mb-6'}>
+      {/* Title (solo si se renderiza en línea) */}
+      {isOpen === undefined && (
+        <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
+          <div>
+            <h2 className="text-sm font-black text-slate-800 uppercase tracking-tight m-0 flex items-center gap-2">
+              <History className="w-4 h-4 text-[#0055A5]" />
+              <span>Histórico de Beneficios y Cierres Mensuales</span>
+            </h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Registro inmutable de los márgenes y beneficios congelados al finalizar cada mes.
+            </p>
+          </div>
+          <span className="text-xs font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>{closuresByMonth.length} Meses cerrados</span>
+          </span>
         </div>
-        <span className="text-xs font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 flex items-center gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-          <span>{closuresByMonth.length} Meses cerrados</span>
-        </span>
-      </div>
+      )}
+
+      {/* Badge de meses cerrados en vista Modal */}
+      {isOpen !== undefined && (
+        <div className="flex items-center justify-between bg-slate-50 border border-slate-200/80 rounded-xl px-3.5 py-2">
+          <span className="text-xs text-slate-600 font-medium">
+            Márgenes y facturación congelados:
+          </span>
+          <span className="text-xs font-bold text-slate-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200 flex items-center gap-1.5 shadow-2xs">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>{closuresByMonth.length} {closuresByMonth.length === 1 ? 'Mes cerrado' : 'Meses cerrados'}</span>
+          </span>
+        </div>
+      )}
 
       {/* List of Closed Months */}
       {closuresByMonth.length === 0 ? (
@@ -258,4 +289,27 @@ export const MonthlyClosuresHistory = () => {
       )}
     </div>
   );
+
+  if (isOpen !== undefined) {
+    return (
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="Histórico de Beneficios y Cierres Mensuales"
+        subtitle="Registro oficial de beneficios e ingresos congelados de meses anteriores."
+        maxWidth="max-w-3xl"
+      >
+        <div className="max-h-[75vh] overflow-y-auto pr-1">
+          {content}
+        </div>
+        <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
+          <Button variant="outline" size="sm" onClick={onClose} className="text-xs font-bold">
+            Cerrar
+          </Button>
+        </div>
+      </Modal>
+    );
+  }
+
+  return content;
 };

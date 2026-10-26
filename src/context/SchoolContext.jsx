@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { format } from 'date-fns';
 import { supabase } from '../config/supabaseClient';
 import { useAuth } from './AuthContext';
+import { verifyProfitabilityPin } from '../utils/profitabilitySecurity';
 
 const SchoolContext = createContext(null);
 
@@ -29,8 +30,39 @@ export const SchoolProvider = ({ children }) => {
   // Modo Reorganizar Clases (Arrastrar y soltar clases de un día u hora a otra)
   const [isReorganizing, setIsReorganizing] = useState(false);
 
-  // Profitability overlay in schedule cards
+  // Profitability overlay in schedule cards & financial views
   const [showProfitability, setShowProfitability] = useState(false);
+  const [isProfitabilityModalOpen, setIsProfitabilityModalOpen] = useState(false);
+
+  const openProfitabilityModal = useCallback(() => {
+    setIsProfitabilityModalOpen(true);
+  }, []);
+
+  const closeProfitabilityModal = useCallback(() => {
+    setIsProfitabilityModalOpen(false);
+  }, []);
+
+  const lockProfitability = useCallback(() => {
+    setShowProfitability(false);
+  }, []);
+
+  const toggleProfitability = useCallback(() => {
+    if (showProfitability) {
+      setShowProfitability(false);
+    } else {
+      setIsProfitabilityModalOpen(true);
+    }
+  }, [showProfitability]);
+
+  const unlockProfitability = useCallback(async (enteredPin) => {
+    const isValid = await verifyProfitabilityPin(enteredPin);
+    if (isValid) {
+      setShowProfitability(true);
+      setIsProfitabilityModalOpen(false);
+      return { success: true };
+    }
+    return { success: false, error: 'Contraseña incorrecta' };
+  }, []);
 
   // Trigger for refreshing all queries
   const [refreshKey, setRefreshKey] = useState(0);
@@ -125,6 +157,12 @@ export const SchoolProvider = ({ children }) => {
         setIsReorganizing,
         showProfitability,
         setShowProfitability,
+        isProfitabilityModalOpen,
+        openProfitabilityModal,
+        closeProfitabilityModal,
+        lockProfitability,
+        toggleProfitability,
+        unlockProfitability,
         refreshKey,
         triggerRefresh,
         seedSchoolData,
