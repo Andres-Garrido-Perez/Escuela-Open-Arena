@@ -3,6 +3,17 @@ import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useSchool } from '../context/SchoolContext';
 
+const generateUUID = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 export const useMonthlyClosures = () => {
   const { adminId } = useAuth();
   const { refreshKey, triggerRefresh } = useSchool();
@@ -78,9 +89,24 @@ export const useMonthlyClosures = () => {
       if (fetchErr) throw fetchErr;
 
       const existingByCoach = (existingRows || []).reduce((acc, row) => {
-        acc[row.coach_id] = row.id;
+        if (row.coach_id) acc[row.coach_id] = row.id;
         return acc;
       }, {});
+
+      // Remove obsolete closures for coaches no longer present
+      const currentCoachIds = new Set(
+        coachesData.map((item) => item.coach?.id || item.coach_id).filter(Boolean)
+      );
+      const obsoleteRowIds = (existingRows || [])
+        .filter((row) => !currentCoachIds.has(row.coach_id))
+        .map((row) => row.id);
+
+      if (obsoleteRowIds.length > 0) {
+        await supabase
+          .from('monthly_closures')
+          .delete()
+          .in('id', obsoleteRowIds);
+      }
 
       const rowsToUpsert = coachesData.map((item) => {
         const coachId = item.coach?.id || item.coach_id;
@@ -88,7 +114,8 @@ export const useMonthlyClosures = () => {
         const coachCost = Number((item.coach_cost ?? 0).toFixed(2));
         const netProfit = Number((item.net_margin ?? item.net_profit ?? 0).toFixed(2));
 
-        const row = {
+        return {
+          id: existingByCoach[coachId] || generateUUID(),
           admin_id: adminId,
           month_year: monthYear,
           coach_id: coachId,
@@ -96,12 +123,6 @@ export const useMonthlyClosures = () => {
           coach_cost: coachCost,
           net_profit: netProfit,
         };
-
-        if (existingByCoach[coachId]) {
-          row.id = existingByCoach[coachId];
-        }
-
-        return row;
       });
 
       const { data, error: upsertErr } = await supabase

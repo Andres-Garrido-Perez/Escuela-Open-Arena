@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { useCoaches } from '../../hooks/useCoaches';
 import { CoachFormModal } from './CoachFormModal';
+import { SecurityPasswordModal } from '../ui/SecurityPasswordModal';
 import { Button } from '../ui/Button';
 import { Plus, Edit2, Users } from 'lucide-react';
 
@@ -11,15 +12,22 @@ export const CoachTabsBar = () => {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [coachToEdit, setCoachToEdit] = useState(null);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [pendingCoachToEdit, setPendingCoachToEdit] = useState(null);
 
   const handleOpenCreate = () => {
-    setCoachToEdit(null);
-    setModalOpen(true);
+    setPendingCoachToEdit(null);
+    setPasswordModalOpen(true);
   };
 
   const handleOpenEdit = (coach, e) => {
     e.stopPropagation();
-    setCoachToEdit(coach);
+    setPendingCoachToEdit(coach);
+    setPasswordModalOpen(true);
+  };
+
+  const handlePasswordSuccess = () => {
+    setCoachToEdit(pendingCoachToEdit);
     setModalOpen(true);
   };
 
@@ -131,6 +139,23 @@ export const CoachTabsBar = () => {
         coachToEdit={coachToEdit}
         onSave={handleSaveCoach}
         onDelete={handleDeleteCoach}
+      />
+
+      {/* Modal de Contraseña para Editar/Crear Monitor */}
+      <SecurityPasswordModal
+        isOpen={passwordModalOpen}
+        onClose={() => {
+          setPasswordModalOpen(false);
+          setPendingCoachToEdit(null);
+        }}
+        onSuccess={handlePasswordSuccess}
+        title={pendingCoachToEdit ? `Editar ${pendingCoachToEdit.name}` : 'Añadir Monitor'}
+        description={
+          pendingCoachToEdit
+            ? `Introduce la clave de seguridad para editar los datos, coste por hora o eliminar a ${pendingCoachToEdit.name}.`
+            : 'Introduce la clave de seguridad para dar de alta un nuevo monitor y configurar su coste por hora.'
+        }
+        submitText={pendingCoachToEdit ? 'Acceder a Edición' : 'Continuar'}
       />
     </div>
   );

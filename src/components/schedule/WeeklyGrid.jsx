@@ -490,11 +490,11 @@ export const WeeklyGrid = () => {
 
         {/* MOBILE SINGLE DAY VIEW */}
         <div
-          className={`flex-1 overflow-y-auto p-3 sm:p-4 min-h-0 ${
+          className={`flex-1 overflow-y-auto touch-pan-y overscroll-y-contain p-3 sm:p-4 min-h-0 ${
             mobileViewMode === 'single' ? 'md:hidden' : 'hidden'
           }`}
         >
-          <div className="max-w-xl mx-auto space-y-2.5">
+          <div className="max-w-xl mx-auto space-y-2.5 pb-24 md:pb-4">
             <div className="flex items-center justify-between px-3.5 py-2.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs mb-3">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-black text-slate-900 uppercase">
@@ -562,7 +562,7 @@ export const WeeklyGrid = () => {
 
         {/* MULTI-COLUMN WEEKLY GRID (Desktop / Full view) */}
         <div
-          className={`flex-1 overflow-auto min-h-0 bg-slate-100/50 ${
+          className={`flex-1 overflow-auto touch-pan-y min-h-0 bg-slate-100/50 pb-20 md:pb-0 ${
             mobileViewMode === 'single' ? 'hidden md:block' : 'block'
           }`}
         >

@@ -31,8 +31,10 @@ export const SortableClassSlotCard = ({
       style={style}
       {...(isReorganizing ? attributes : {})}
       {...(isReorganizing ? listeners : {})}
-      className={`touch-none ${
-        isReorganizing ? 'cursor-grab active:cursor-grabbing select-none' : ''
+      className={`${
+        isReorganizing
+          ? 'touch-none cursor-grab active:cursor-grabbing select-none'
+          : 'touch-pan-y'
       } ${isDragging ? 'opacity-30 scale-[0.98]' : 'opacity-100'}`}
     >
       <ClassSlotCard
