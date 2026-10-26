@@ -104,7 +104,7 @@ export const StudentCard = ({
           </button>
           <button
             type="button"
-            onClick={() => onDelete(student.id)}
+            onClick={() => onDelete(student)}
             className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
             title="Eliminar alumno"
           >

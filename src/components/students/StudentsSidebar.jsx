@@ -5,6 +5,7 @@ import { useTariffs } from '../../hooks/useTariffs';
 import { useMonthlyRegistry } from '../../hooks/useMonthlyRegistry';
 import { StudentCard } from './StudentCard';
 import { StudentFormModal } from './StudentFormModal';
+import { ConfirmDeleteModal } from '../ui/ConfirmDeleteModal';
 import { SearchInput } from '../ui/SearchInput';
 import { Button } from '../ui/Button';
 import { Users, UserPlus, PanelRightClose } from 'lucide-react';
@@ -20,6 +21,7 @@ export const StudentsSidebar = () => {
   const [filterType, setFilterType] = useState('todos'); // 'todos' | 'activos' | 'bajas'
   const [modalOpen, setModalOpen] = useState(false);
   const [studentToEdit, setStudentToEdit] = useState(null);
+  const [studentToDelete, setStudentToDelete] = useState(null);
 
   const handleOpenCreate = () => {
     setStudentToEdit(null);
@@ -36,6 +38,16 @@ export const StudentsSidebar = () => {
       return await updateStudent(studentToEdit.id, studentData);
     } else {
       return await addStudent(studentData);
+    }
+  };
+
+  const handleDeleteStudent = async () => {
+    if (!studentToDelete) return;
+    await deleteStudent(studentToDelete.id);
+    setStudentToDelete(null);
+    if (modalOpen && studentToEdit?.id === studentToDelete.id) {
+      setModalOpen(false);
+      setStudentToEdit(null);
     }
   };
 
@@ -154,7 +166,7 @@ export const StudentsSidebar = () => {
             student={student}
             tariff={tariffsById[student.tariff_id]}
             onEdit={handleOpenEdit}
-            onDelete={deleteStudent}
+            onDelete={(st) => setStudentToDelete(st)}
           />
         ))}
 
@@ -169,12 +181,25 @@ export const StudentsSidebar = () => {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Modal Formulario Alumno */}
       <StudentFormModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         studentToEdit={studentToEdit}
         onSave={handleSaveStudent}
+        onDelete={(st) => setStudentToDelete(st)}
+      />
+
+      {/* Modal Confirmación de Eliminación de Alumno */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(studentToDelete)}
+        onClose={() => setStudentToDelete(null)}
+        onConfirm={handleDeleteStudent}
+        title="¿Eliminar Alumno?"
+        itemName={studentToDelete?.full_name}
+        itemType="alumno"
+        description={`¿Estás seguro de que deseas eliminar permanentemente a "${studentToDelete?.full_name}"? Esta acción lo desmatriculará de todas las clases y borrará su ficha.`}
+        confirmText="Sí, Eliminar Alumno"
       />
     </aside>
   );

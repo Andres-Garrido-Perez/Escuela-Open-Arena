@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { ConfirmDeleteModal } from '../ui/ConfirmDeleteModal';
 import { useSchool } from '../../context/SchoolContext';
+import { Trash2 } from 'lucide-react';
 
 const COLOR_OPTIONS = [
   { label: 'Azul Real', value: '#0055A5' },
@@ -18,6 +20,7 @@ export const CoachFormModal = ({
   onClose,
   coachToEdit = null,
   onSave,
+  onDelete = null,
 }) => {
   const { sport } = useSchool();
   const [name, setName] = useState('');
@@ -28,6 +31,7 @@ export const CoachFormModal = ({
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (coachToEdit) {
@@ -181,15 +185,51 @@ export const CoachFormModal = ({
           />
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
-            Cancelar
-          </Button>
-          <Button type="submit" variant="primary" loading={loading}>
-            {coachToEdit ? 'Guardar Cambios' : 'Crear Monitor'}
-          </Button>
+        <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100 flex-wrap">
+          <div>
+            {coachToEdit && onDelete && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-rose-200"
+                title="Eliminar este monitor"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Eliminar Monitor</span>
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto">
+            <Button variant="secondary" onClick={onClose} disabled={loading}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" loading={loading}>
+              {coachToEdit ? 'Guardar Cambios' : 'Crear Monitor'}
+            </Button>
+          </div>
         </div>
       </form>
+
+      {/* Modal Confirmación de Eliminación de Monitor */}
+      {showDeleteConfirm && (
+        <ConfirmDeleteModal
+          isOpen={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={async () => {
+            if (coachToEdit?.id && onDelete) {
+              await onDelete(coachToEdit.id);
+              setShowDeleteConfirm(false);
+              onClose();
+            }
+          }}
+          title="¿Eliminar Monitor?"
+          itemName={coachToEdit?.name}
+          itemType="monitor"
+          description={`¿Estás seguro de que deseas eliminar al monitor "${coachToEdit?.name}"? Las clases que tuviera asignadas pasarán a estar sin monitor asignado.`}
+          confirmText="Sí, Eliminar Monitor"
+        />
+      )}
     </Modal>
   );
 };

@@ -47,25 +47,36 @@ export const Modal = ({
         {/* Mobile handle indicator */}
         <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mt-2.5 sm:hidden shrink-0" />
 
-        {/* Header */}
-        <div className="flex items-start justify-between p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 shrink-0">
-          <div>
-            <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-              {title}
-            </h3>
-            {subtitle && (
-              <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
-            )}
+        {/* Header (rendered only when title or subtitle is provided) */}
+        {(title || subtitle) ? (
+          <div className="flex items-start justify-between p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 shrink-0">
+            <div>
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+                {title}
+              </h3>
+              {subtitle && (
+                <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 sm:p-1.5 rounded-xl transition-colors cursor-pointer"
+              aria-label="Cerrar modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
+        ) : (
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 sm:p-1.5 rounded-xl transition-colors cursor-pointer"
+            className="absolute top-3.5 right-3.5 sm:top-4 sm:right-4 z-20 text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-xl transition-colors cursor-pointer"
             aria-label="Cerrar modal"
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
+        )}
 
         {/* Content with dynamic scroll */}
         <div className="p-4 sm:p-5 overflow-y-auto">{children}</div>

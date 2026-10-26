@@ -6,7 +6,7 @@ import { useSchool } from '../../context/SchoolContext';
 import { useTariffs } from '../../hooks/useTariffs';
 import { useCoaches } from '../../hooks/useCoaches';
 import { useSchedule } from '../../hooks/useSchedule';
-import { Clock, Calendar, Sparkles, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Clock, Calendar, Sparkles, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react';
 
 const DAYS_OF_WEEK = [
   { day: 1, short: 'L', label: 'Lunes' },
@@ -54,6 +54,7 @@ export const StudentFormModal = ({
   onClose,
   studentToEdit = null,
   onSave,
+  onDelete = null,
 }) => {
   const { sport, triggerRefresh } = useSchool();
   const { filteredTariffs } = useTariffs();
@@ -728,29 +729,45 @@ export const StudentFormModal = ({
           />
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            variant={hasFullClassConflict ? 'danger' : 'primary'}
-            loading={loading}
-            disabled={loading || hasHoursConflict || hasFullClassConflict}
-            title={
-              hasFullClassConflict
-                ? 'No se puede crear el alumno: la clase seleccionada está completa'
-                : hasHoursConflict
-                ? 'Corrige el conflicto de horas vs días antes de guardar'
-                : ''
-            }
-          >
-            {hasFullClassConflict
-              ? 'Clase Completa (Sin Plazas)'
-              : studentToEdit
-              ? 'Guardar Alumno'
-              : 'Crear e Inscribir Alumno'}
-          </Button>
+        <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100 flex-wrap">
+          <div>
+            {studentToEdit && onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(studentToEdit)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-rose-200"
+                title="Eliminar permanentemente a este alumno"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Eliminar Alumno</span>
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto">
+            <Button variant="secondary" onClick={onClose} disabled={loading}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              variant={hasFullClassConflict ? 'danger' : 'primary'}
+              loading={loading}
+              disabled={loading || hasHoursConflict || hasFullClassConflict}
+              title={
+                hasFullClassConflict
+                  ? 'No se puede crear el alumno: la clase seleccionada está completa'
+                  : hasHoursConflict
+                  ? 'Corrige el conflicto de horas vs días antes de guardar'
+                  : ''
+              }
+            >
+              {hasFullClassConflict
+                ? 'Clase Completa (Sin Plazas)'
+                : studentToEdit
+                ? 'Guardar Alumno'
+                : 'Crear e Inscribir Alumno'}
+            </Button>
+          </div>
         </div>
       </form>
 

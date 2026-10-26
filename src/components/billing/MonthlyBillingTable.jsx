@@ -10,6 +10,7 @@ import { MonthlyClosuresHistory } from './MonthlyClosuresHistory';
 import { CloseMonthModal } from './CloseMonthModal';
 import { CoachSalaryModal } from '../coaches/CoachSalaryModal';
 import { StudentFormModal } from '../students/StudentFormModal';
+import { ConfirmDeleteModal } from '../ui/ConfirmDeleteModal';
 import { Badge } from '../ui/Badge';
 import { SearchInput } from '../ui/SearchInput';
 import {
@@ -32,7 +33,7 @@ import { es } from 'date-fns/locale';
 
 export const MonthlyBillingTable = () => {
   const { selectedMonth, sport, showProfitability, toggleProfitability } = useSchool();
-  const { filteredStudents, updateStudent } = useStudents();
+  const { filteredStudents, updateStudent, deleteStudent } = useStudents();
   const { tariffs } = useTariffs();
   const { filteredCoaches, updateCoach } = useCoaches();
   const { allSlots, slots, enrollments } = useSchedule();
@@ -47,6 +48,16 @@ export const MonthlyBillingTable = () => {
   const [salaryModalOpen, setSalaryModalOpen] = useState(false);
   const [coachForSalary, setCoachForSalary] = useState(null);
   const [studentToEdit, setStudentToEdit] = useState(null);
+  const [studentToDelete, setStudentToDelete] = useState(null);
+
+  const handleDeleteStudent = async () => {
+    if (!studentToDelete) return;
+    await deleteStudent(studentToDelete.id);
+    setStudentToDelete(null);
+    if (studentToEdit?.id === studentToDelete.id) {
+      setStudentToEdit(null);
+    }
+  };
 
   const handleOpenSalary = (coach) => {
     setCoachForSalary(coach);
@@ -1172,6 +1183,19 @@ export const MonthlyBillingTable = () => {
             return updated;
           }
         }}
+        onDelete={(st) => setStudentToDelete(st)}
+      />
+
+      {/* Modal Confirmación de Eliminación de Alumno */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(studentToDelete)}
+        onClose={() => setStudentToDelete(null)}
+        onConfirm={handleDeleteStudent}
+        title="¿Eliminar Alumno?"
+        itemName={studentToDelete?.full_name}
+        itemType="alumno"
+        description={`¿Estás seguro de que deseas eliminar permanentemente a "${studentToDelete?.full_name}"? Esta acción lo desmatriculará de todas las clases y borrará su ficha.`}
+        confirmText="Sí, Eliminar Alumno"
       />
     </div>
   );

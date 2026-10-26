@@ -120,6 +120,13 @@ export const useStudents = () => {
     setStudents((prev) => prev.filter((s) => s.id !== id));
 
     try {
+      // 1. Eliminar matrículas en clases del alumno
+      await supabase
+        .from('class_enrollments')
+        .delete()
+        .eq('student_id', id);
+
+      // 2. Eliminar de la tabla students
       const { error: err } = await supabase
         .from('students')
         .delete()

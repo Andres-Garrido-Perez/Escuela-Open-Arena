@@ -117,6 +117,14 @@ export const useCoaches = () => {
     setCoaches((prev) => prev.filter((c) => c.id !== id));
 
     try {
+      // 1. Desasociar monitor de las clases para evitar errores de clave foránea
+      await supabase
+        .from('class_slots')
+        .update({ coach_id: null })
+        .eq('coach_id', id)
+        .eq('admin_id', adminId);
+
+      // 2. Eliminar de la tabla coaches
       const { error: err } = await supabase
         .from('coaches')
         .delete()

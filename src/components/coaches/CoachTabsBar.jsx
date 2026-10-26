@@ -7,7 +7,7 @@ import { Plus, Edit2, Users } from 'lucide-react';
 
 export const CoachTabsBar = () => {
   const { activeCoachId, setActiveCoachId, sport } = useSchool();
-  const { filteredCoaches, addCoach, updateCoach } = useCoaches();
+  const { filteredCoaches, addCoach, updateCoach, deleteCoach } = useCoaches();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [coachToEdit, setCoachToEdit] = useState(null);
@@ -32,6 +32,13 @@ export const CoachTabsBar = () => {
       if (created?.id) {
         setActiveCoachId(created.id);
       }
+    }
+  };
+
+  const handleDeleteCoach = async (coachId) => {
+    await deleteCoach(coachId);
+    if (activeCoachId === coachId) {
+      setActiveCoachId(null);
     }
   };
 
@@ -123,6 +130,7 @@ export const CoachTabsBar = () => {
         onClose={() => setModalOpen(false)}
         coachToEdit={coachToEdit}
         onSave={handleSaveCoach}
+        onDelete={handleDeleteCoach}
       />
     </div>
   );
