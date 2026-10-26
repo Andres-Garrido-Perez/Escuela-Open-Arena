@@ -564,14 +564,9 @@ export const StudentFormModal = ({
 
         {/* NUEVA SECCIÓN: HORARIO Y ASIGNACIÓN AUTOMÁTICA */}
         <div className="p-3.5 bg-gradient-to-br from-blue-50/70 to-indigo-50/40 rounded-2xl border border-blue-200/80 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-black text-[#0055A5] uppercase tracking-wide">
-              <Calendar className="w-4 h-4 text-[#0055A5]" />
-              <span>Horario y Asignación Automática</span>
-            </div>
-            <span className="text-[10px] text-blue-700 font-bold bg-blue-100 px-2 py-0.5 rounded-full border border-blue-200">
-              Auto-Inscripción
-            </span>
+          <div className="flex items-center gap-1.5 text-xs font-black text-[#0055A5] uppercase tracking-wide">
+            <Calendar className="w-4 h-4 text-[#0055A5]" />
+            <span>Horario y Asignación Automática</span>
           </div>
 
           <p className="text-[11px] text-slate-500 leading-snug">
@@ -591,7 +586,7 @@ export const StudentFormModal = ({
               <option value="">Cualquier monitor disponible</option>
               {filteredCoaches.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} ({Number(c.hourly_cost || 0).toFixed(2)}€/h)
+                  {c.name}
                 </option>
               ))}
             </select>
