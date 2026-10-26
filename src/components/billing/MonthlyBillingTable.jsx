@@ -11,6 +11,7 @@ import { CloseMonthModal } from './CloseMonthModal';
 import { CoachSalaryModal } from '../coaches/CoachSalaryModal';
 import { StudentFormModal } from '../students/StudentFormModal';
 import { ConfirmDeleteModal } from '../ui/ConfirmDeleteModal';
+import { resolveStudentTariff } from '../../utils/tariffResolver';
 import { Badge } from '../ui/Badge';
 import { SearchInput } from '../ui/SearchInput';
 import {
@@ -98,7 +99,9 @@ export const MonthlyBillingTable = () => {
         const registry = registryMap[student.id];
         // Por defecto todos aparecen como 'pagado' salvo que expresamente se hayan marcado
         const status = registry?.status || 'pagado';
-        const tariff = tariffsById[student.tariff_id];
+        const tariff =
+          tariffsById[student.tariff_id] ||
+          resolveStudentTariff(student, tariffs, allSlots || slots, enrollments);
 
         let price = 0;
         if (

@@ -47,7 +47,10 @@ export const ProfitabilitySlotBadge = ({
   let ingresoBruto = 0;
 
   activeEnrolled.forEach((student) => {
-    const tariff = tariffsById[student.tariff_id];
+    const tariff =
+      tariffsById[student.tariff_id] ||
+      tariffsById[slot.tariff_id] ||
+      tariffs.find((t) => t.code && t.code.toLowerCase() === student.tariff_code?.toLowerCase());
     let monthlyPrice = 0;
 
     if (tariff) {

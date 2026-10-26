@@ -6,6 +6,7 @@ import { useSchool } from '../../context/SchoolContext';
 import { useTariffs } from '../../hooks/useTariffs';
 import { useCoaches } from '../../hooks/useCoaches';
 import { useSchedule } from '../../hooks/useSchedule';
+import { resolveStudentTariff } from '../../utils/tariffResolver';
 import { Clock, Calendar, Sparkles, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react';
 
 const DAYS_OF_WEEK = [
@@ -59,7 +60,8 @@ export const StudentFormModal = ({
   const { sport, triggerRefresh } = useSchool();
   const { filteredTariffs } = useTariffs();
   const { filteredCoaches } = useCoaches();
-  const { autoAssignStudentToSchedule, slots, allSlots, enrollments } = useSchedule();
+  const { autoAssignStudentToSchedule, unenrollStudent, slots, allSlots, enrollments } =
+    useSchedule();
   const scheduleSlots = allSlots || slots || [];
 
   // ONLY full_name is mandatory!
@@ -89,18 +91,56 @@ export const StudentFormModal = ({
       setFullName(studentToEdit.full_name || '');
       setPhone(studentToEdit.phone || '');
       setStudentSport(studentToEdit.sport || sport || 'tenis');
-      setTariffId(studentToEdit.tariff_id || '');
       setIsMember(Boolean(studentToEdit.is_member));
-      setWeeklyHours(
-        studentToEdit.weekly_hours_contracted
-          ? String(studentToEdit.weekly_hours_contracted)
-          : ''
-      );
       setStatus(studentToEdit.status || 'activo');
       setNotes(studentToEdit.notes || '');
-      setAssignedCoachId('');
-      setAssignedDays([]);
-      setAssignedTime('');
+
+      // 1. Cargar clases y horarios en los que el alumno ya está matriculado
+      const studentEnrollments = (enrollments || []).filter(
+        (e) => e.student_id === studentToEdit.id
+      );
+      const studentSlots = studentEnrollments
+        .map((e) => scheduleSlots.find((s) => s.id === e.class_slot_id))
+        .filter(Boolean);
+
+      if (studentSlots.length > 0) {
+        const days = Array.from(
+          new Set(studentSlots.map((s) => Number(s.day_of_week)))
+        ).sort((a, b) => a - b);
+        setAssignedDays(days);
+
+        const coachSlot = studentSlots.find((s) => s.coach_id);
+        setAssignedCoachId(coachSlot?.coach_id || '');
+
+        const firstTime = studentSlots[0]?.start_time
+          ? studentSlots[0].start_time.slice(0, 5)
+          : '';
+        setAssignedTime(firstTime);
+      } else {
+        setAssignedDays([]);
+        setAssignedCoachId('');
+        setAssignedTime('');
+      }
+
+      // 2. Resolución inteligente de tarifa
+      const resolved = resolveStudentTariff(
+        studentToEdit,
+        filteredTariffs,
+        scheduleSlots,
+        enrollments
+      );
+      setTariffId(resolved?.id || studentToEdit.tariff_id || '');
+
+      // 3. Horas contratadas
+      if (studentToEdit.weekly_hours_contracted) {
+        setWeeklyHours(String(studentToEdit.weekly_hours_contracted));
+      } else if (resolved?.hours_per_week) {
+        setWeeklyHours(String(resolved.hours_per_week));
+      } else if (studentSlots.length > 0) {
+        setWeeklyHours(String(studentSlots.length));
+      } else {
+        setWeeklyHours('');
+      }
     } else {
       setFullName('');
       setPhone('');
@@ -115,7 +155,7 @@ export const StudentFormModal = ({
       setAssignedTime('');
     }
     setError('');
-  }, [studentToEdit, sport, isOpen]);
+  }, [studentToEdit, sport, isOpen, enrollments, scheduleSlots, filteredTariffs]);
 
   const selectedTariff = filteredTariffs.find((t) => t.id === tariffId);
   const contractedHoursNum = Number(weeklyHours) || 0;
@@ -331,30 +371,47 @@ export const StudentFormModal = ({
 
       // LÓGICA INTELIGENTE DE AUTO-ASIGNACIÓN DE CLASES
       const targetStudentId = savedStudent?.id || studentToEdit?.id;
-      if (targetStudentId && assignedDays.length > 0) {
-        const effectiveStartTime =
-          assignedTime || existingGroupMatches[0]?.startTime || nextAvailableTime || '17:00';
+      if (targetStudentId) {
+        // Si estamos editando y se desmarcó algún día de la semana, desmatricular de ese slot
+        if (studentToEdit && unenrollStudent) {
+          const studentEnrollments = (enrollments || []).filter(
+            (e) => e.student_id === targetStudentId
+          );
+          const slotsToUnenroll = studentEnrollments
+            .map((e) => scheduleSlots.find((s) => s.id === e.class_slot_id))
+            .filter(Boolean)
+            .filter((s) => !assignedDays.includes(Number(s.day_of_week)));
 
-        const result = await autoAssignStudentToSchedule({
-          studentId: targetStudentId,
-          coachId: assignedCoachId || null,
-          daysOfWeek: assignedDays,
-          startTime: effectiveStartTime,
-          tariffId: tariffId || null,
-          levelLabel: selectedTariff?.level_label || selectedTariff?.category_name || 'General',
-          categoryName: selectedTariff?.category_name || 'General',
-          sport: studentSport,
-          maxCapacity: selectedTariff?.max_students || 4,
-        });
+          for (const s of slotsToUnenroll) {
+            await unenrollStudent(s.id, targetStudentId);
+          }
+        }
 
-        if (result?.conflicts && result.conflicts.length > 0) {
-          setConflictModalData({
-            title: 'Aviso de Conflicto en Cuadrante',
-            conflicts: result.conflicts,
-            solution: 'El alumno ha sido registrado, pero no se ha podido inscribir automáticamente en todas las clases por limitaciones de aforo. Puedes resolverlo manualmente en el cuadrante.',
+        if (assignedDays.length > 0) {
+          const effectiveStartTime =
+            assignedTime || existingGroupMatches[0]?.startTime || nextAvailableTime || '17:00';
+
+          const result = await autoAssignStudentToSchedule({
+            studentId: targetStudentId,
+            coachId: assignedCoachId || null,
+            daysOfWeek: assignedDays,
+            startTime: effectiveStartTime,
+            tariffId: tariffId || null,
+            levelLabel: selectedTariff?.level_label || selectedTariff?.category_name || 'General',
+            categoryName: selectedTariff?.category_name || 'General',
+            sport: studentSport,
+            maxCapacity: selectedTariff?.max_students || 4,
           });
-          setShowConflictModal(true);
-          return;
+
+          if (result?.conflicts && result.conflicts.length > 0) {
+            setConflictModalData({
+              title: 'Aviso de Conflicto en Cuadrante',
+              conflicts: result.conflicts,
+              solution: 'El alumno ha sido registrado, pero no se ha podido inscribir automáticamente en todas las clases por limitaciones de aforo. Puedes resolverlo manualmente en el cuadrante.',
+            });
+            setShowConflictModal(true);
+            return;
+          }
         }
       }
 

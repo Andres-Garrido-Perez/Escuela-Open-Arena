@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { useStudents } from '../../hooks/useStudents';
 import { useTariffs } from '../../hooks/useTariffs';
+import { useSchedule } from '../../hooks/useSchedule';
 import { useMonthlyRegistry } from '../../hooks/useMonthlyRegistry';
+import { resolveStudentTariff } from '../../utils/tariffResolver';
 import { StudentCard } from './StudentCard';
 import { StudentFormModal } from './StudentFormModal';
 import { ConfirmDeleteModal } from '../ui/ConfirmDeleteModal';
@@ -15,6 +17,7 @@ export const StudentsSidebar = () => {
   const { filteredStudents, addStudent, updateStudent, deleteStudent } =
     useStudents();
   const { tariffs } = useTariffs();
+  const { allSlots, slots, enrollments } = useSchedule();
   const { isStudentBaja } = useMonthlyRegistry();
 
   const [search, setSearch] = useState('');
@@ -164,7 +167,10 @@ export const StudentsSidebar = () => {
           <StudentCard
             key={student.id}
             student={student}
-            tariff={tariffsById[student.tariff_id]}
+            tariff={
+              tariffsById[student.tariff_id] ||
+              resolveStudentTariff(student, tariffs, allSlots || slots, enrollments)
+            }
             onEdit={handleOpenEdit}
             onDelete={(st) => setStudentToDelete(st)}
           />
