@@ -48,6 +48,8 @@ export const ClassSlotModal = ({
   };
 
   useEffect(() => {
+    if (!isOpen) return;
+
     if (slotToEdit) {
       setDayOfWeek(Number(slotToEdit.day_of_week) || 1);
       setCoachId(slotToEdit.coach_id || '');
@@ -83,7 +85,7 @@ export const ClassSlotModal = ({
       }
     }
     setError('');
-  }, [slotToEdit, initialDay, activeCoachId, coaches, isOpen, tariffs]);
+  }, [isOpen, slotToEdit]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

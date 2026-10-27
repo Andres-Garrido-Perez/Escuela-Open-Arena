@@ -34,6 +34,8 @@ export const CoachFormModal = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
+    if (!isOpen) return;
+
     if (coachToEdit) {
       setName(coachToEdit.name || '');
       setCoachSport(coachToEdit.sport || sport || 'tenis');
@@ -50,7 +52,7 @@ export const CoachFormModal = ({
       setNotes('');
     }
     setError('');
-  }, [coachToEdit, sport, isOpen]);
+  }, [isOpen, coachToEdit]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

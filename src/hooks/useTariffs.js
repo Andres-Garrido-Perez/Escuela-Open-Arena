@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useSchool } from '../context/SchoolContext';
@@ -277,8 +277,12 @@ export const useTariffs = () => {
     if (triggerRefresh) triggerRefresh();
   };
 
-  const filteredTariffs = tariffs.filter(
-    (t) => !t.sport || !sport || t.sport.toLowerCase() === sport.toLowerCase()
+  const filteredTariffs = useMemo(
+    () =>
+      tariffs.filter(
+        (t) => !t.sport || !sport || t.sport.toLowerCase() === sport.toLowerCase()
+      ),
+    [tariffs, sport]
   );
 
   return {

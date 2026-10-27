@@ -43,6 +43,8 @@ export const TariffModal = ({
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!isOpen) return;
+
     if (tariffToEdit) {
       setSport(tariffToEdit.sport || 'tenis');
       setCategoryName(tariffToEdit.category_name || '');
@@ -73,7 +75,7 @@ export const TariffModal = ({
       setActive(true);
     }
     setError('');
-  }, [tariffToEdit, defaultSport, isOpen]);
+  }, [isOpen, tariffToEdit]);
 
   // Autogenerar código intuitivo
   const handleGenerateCode = (cat, h, sp) => {

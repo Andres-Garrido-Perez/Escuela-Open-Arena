@@ -14,6 +14,8 @@ export const CoachSalaryModal = ({
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!isOpen) return;
+
     if (coach) {
       setHourlyCost(
         coach.hourly_cost !== null && coach.hourly_cost !== undefined
@@ -24,7 +26,7 @@ export const CoachSalaryModal = ({
       setHourlyCost('');
     }
     setError('');
-  }, [coach, isOpen]);
+  }, [isOpen, coach?.id]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

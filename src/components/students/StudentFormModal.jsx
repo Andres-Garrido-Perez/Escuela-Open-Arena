@@ -87,6 +87,8 @@ export const StudentFormModal = ({
   const [conflictModalData, setConflictModalData] = useState(null);
 
   useEffect(() => {
+    if (!isOpen) return;
+
     if (studentToEdit) {
       setFullName(studentToEdit.full_name || '');
       setPhone(studentToEdit.phone || '');
@@ -155,7 +157,7 @@ export const StudentFormModal = ({
       setAssignedTime('');
     }
     setError('');
-  }, [studentToEdit, sport, isOpen, enrollments, scheduleSlots, filteredTariffs]);
+  }, [isOpen, studentToEdit]);
 
   const selectedTariff = filteredTariffs.find((t) => t.id === tariffId);
   const contractedHoursNum = Number(weeklyHours) || 0;

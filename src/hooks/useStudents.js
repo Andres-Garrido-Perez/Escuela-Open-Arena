@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useSchool } from '../context/SchoolContext';
@@ -41,8 +41,12 @@ export const useStudents = () => {
   }, [fetchStudents, refreshKey]);
 
   // Filter students by active sport (or all if no sport filter)
-  const filteredStudents = students.filter(
-    (s) => !s.sport || !sport || s.sport.toLowerCase() === sport.toLowerCase()
+  const filteredStudents = useMemo(
+    () =>
+      students.filter(
+        (s) => !s.sport || !sport || s.sport.toLowerCase() === sport.toLowerCase()
+      ),
+    [students, sport]
   );
 
   const addStudent = async (studentData) => {
