@@ -146,34 +146,6 @@ export const ProfitabilitySlotBadge = ({
                 </tr>
               )}
             </tbody>
-            {studentBreakdown.length > 0 && (
-              <tfoot>
-                {/* Fila dorada de Totales (tal como en la imagen del usuario) */}
-                <tr className="bg-amber-400 text-slate-950 font-black border-t-2 border-amber-500">
-                  <td className="py-1 px-2 text-left uppercase text-[9px] tracking-wider">
-                    Total
-                  </td>
-                  <td className="py-1 px-2 text-right text-[10px]">
-                    {totalCuotasMes.toFixed(2)} €
-                  </td>
-                  <td className="py-1 px-2 text-right text-[10px]">
-                    {ingresoBruto.toFixed(2)} €
-                  </td>
-                </tr>
-                {/* Fila dorada de NETO (tal como en la imagen del usuario) */}
-                <tr className="bg-amber-400 text-slate-950 font-black border-t border-amber-300">
-                  <td className="py-1 px-2 text-left uppercase text-[9px] tracking-wider">
-                    NETO
-                  </td>
-                  <td className="py-1 px-2 text-right text-[9px] font-bold text-slate-800">
-                    (Margen)
-                  </td>
-                  <td className="py-1 px-2 text-right text-[11px] font-black">
-                    {beneficioReal >= 0 ? '+' : ''}{beneficioReal.toFixed(2)} €
-                  </td>
-                </tr>
-              </tfoot>
-            )}
           </table>
         </div>
       </div>
