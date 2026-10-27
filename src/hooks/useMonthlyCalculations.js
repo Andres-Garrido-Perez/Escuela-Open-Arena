@@ -276,29 +276,115 @@ export const useMonthlyCalculations = (targetMonth = null) => {
 
     return {
       isClosed: true,
-      hasPendingChanges: changed,
+      hasPendingChanges: Boolean(isCurrentMonthUnlocked && changed),
     };
-  }, [getClosuresForMonth, selectedMonth, coachesBreakdown]);
+  }, [getClosuresForMonth, selectedMonth, coachesBreakdown, isCurrentMonthUnlocked]);
+
+  // Si el mes está cerrado y NO ha sido desbloqueado expresamente en esta sesión,
+  // congelar los totales económicos a las cifras oficiales guardadas en el cierre.
+  const monthClosures = getClosuresForMonth(selectedMonth) || [];
+  const hasClosedRecords = isClosed && monthClosures.length > 0;
+
+  const finalTotals = useMemo(() => {
+    if (!hasClosedRecords || isCurrentMonthUnlocked) {
+      return {
+        totalRecaudado,
+        totalCosteMonitores,
+        totalBeneficioEscuela,
+        totalRecaudadoNetoSinIva,
+        coachesBreakdown,
+      };
+    }
+
+    const savedTotalRev = monthClosures.reduce(
+      (sum, c) => sum + (Number(c.total_revenue) || 0),
+      0
+    );
+    const savedTotalCost = monthClosures.reduce(
+      (sum, c) => sum + (Number(c.coach_cost) || 0),
+      0
+    );
+    const savedTotalProfit = monthClosures.reduce(
+      (sum, c) => sum + (Number(c.net_profit) || 0),
+      0
+    );
+
+    const savedByCoach = {};
+    monthClosures.forEach((c) => {
+      savedByCoach[c.coach_id] = {
+        revenue: Number(c.total_revenue || 0),
+        cost: Number(c.coach_cost || 0),
+        profit: Number(c.net_profit || 0),
+      };
+    });
+
+    const frozenBreakdown = (coachesBreakdown || []).map((item) => {
+      const coachId = item.coach?.id || item.coach_id;
+      const saved = savedByCoach[coachId];
+      if (saved) {
+        return {
+          ...item,
+          gross_revenue: saved.revenue,
+          net_revenue: saved.revenue / 1.21,
+          coach_cost: saved.cost,
+          net_margin: saved.profit,
+          marginPct: saved.revenue > 0 ? (saved.profit / (saved.revenue / 1.21)) * 100 : 0,
+        };
+      }
+      return item;
+    });
+
+    return {
+      totalRecaudado: savedTotalRev,
+      totalCosteMonitores: savedTotalCost,
+      totalBeneficioEscuela: savedTotalProfit,
+      totalRecaudadoNetoSinIva: savedTotalRev / 1.21,
+      coachesBreakdown: frozenBreakdown,
+    };
+  }, [
+    hasClosedRecords,
+    isCurrentMonthUnlocked,
+    monthClosures,
+    totalRecaudado,
+    totalCosteMonitores,
+    totalBeneficioEscuela,
+    totalRecaudadoNetoSinIva,
+    coachesBreakdown,
+  ]);
 
   const handleCloseMonth = useCallback(async () => {
-    await closeMonth(selectedMonth, coachesBreakdown);
+    await closeMonth(selectedMonth, coachesBreakdown, rows, {
+      slots: allSlots || slots,
+      enrollments,
+      totals: finalTotals,
+    });
     if (lockMonthEditing) {
       lockMonthEditing(selectedMonth);
     }
-  }, [closeMonth, selectedMonth, coachesBreakdown, lockMonthEditing]);
+  }, [
+    closeMonth,
+    selectedMonth,
+    coachesBreakdown,
+    rows,
+    allSlots,
+    slots,
+    enrollments,
+    finalTotals,
+    lockMonthEditing,
+  ]);
 
   return {
     selectedMonth,
     formattedMonth,
     rows,
     rowsByStudentId,
-    totalRecaudado,
+    totalRecaudado: finalTotals.totalRecaudado,
     totalPendiente,
     totalBajas,
-    coachesBreakdown,
-    totalCosteMonitores,
-    totalRecaudadoNetoSinIva,
-    totalBeneficioEscuela,
+    coachesBreakdown: finalTotals.coachesBreakdown,
+    totalCosteMonitores: finalTotals.totalCosteMonitores,
+    totalRecaudadoNetoSinIva: finalTotals.totalRecaudadoNetoSinIva,
+    totalBeneficioEscuela: finalTotals.totalBeneficioEscuela,
     isClosed,
     hasPendingChanges,
     isCurrentMonthUnlocked,

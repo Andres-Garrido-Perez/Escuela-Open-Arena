@@ -42,10 +42,12 @@ export const useMonthlyRegistry = () => {
   }, [fetchMonthlyRegistry, refreshKey]);
 
   // Build effective registry map for selectedMonth with forward persistence:
-  // Cuando se da de baja a un alumno en el mes M, permanece de baja en todos los meses siguientes (M+1, M+2...)
-  // hasta que en algún mes futuro se reactive expresamente, momento a partir del cual vuelve a estar activo en todos los siguientes.
+  // - Si el mes está CERRADO: no hereda bajas de meses anteriores; se mantiene inmutable con su estado cerrado.
+  // - Si el mes está ABIERTO: un alumno de baja en mes M permanece de baja en meses siguientes hasta que se reactive.
   const registryMap = useMemo(() => {
     if (!selectedMonth) return {};
+
+    const isCurrentClosed = Boolean(isMonthClosed?.(selectedMonth));
 
     // Agrupar entradas históricas por student_id
     const entriesByStudent = {};
@@ -71,7 +73,20 @@ export const useMonthlyRegistry = () => {
         return;
       }
 
-      // 2. Si no hay registro explícito este mes, buscar la última entrada anterior a selectedMonth (month_year < selectedMonth)
+      // Si este mes está CERRADO y no tiene registro explícito de baja en este mes:
+      // Un mes cerrado es inmutable y NO debe heredar bajas o modificaciones hechas en meses anteriores.
+      if (isCurrentClosed) {
+        map[studentId] = {
+          id: null,
+          student_id: studentId,
+          month_year: selectedMonth,
+          status: 'pagado',
+          isInherited: false,
+        };
+        return;
+      }
+
+      // 2. Si el mes está ABIERTO (no cerrado), buscar la última entrada anterior a selectedMonth (month_year < selectedMonth)
       const pastEntries = studentEntries
         .filter((e) => e.month_year < selectedMonth)
         .sort((a, b) => (b.month_year || '').localeCompare(a.month_year || ''));
@@ -79,8 +94,7 @@ export const useMonthlyRegistry = () => {
       const latestPastEntry = pastEntries[0];
 
       if (latestPastEntry && latestPastEntry.status === 'baja_temporal') {
-        // El alumno se dio de baja en un mes anterior y aún no se ha reactivado:
-        // Hereda el estado de baja temporal para el mes actual y siguientes!
+        // En meses abiertos, el alumno hereda la baja temporal hacia adelante
         map[studentId] = {
           ...latestPastEntry,
           id: null,
@@ -90,7 +104,6 @@ export const useMonthlyRegistry = () => {
           inheritedFromMonth: latestPastEntry.month_year,
         };
       } else if (latestPastEntry) {
-        // El último estado anterior fue activo (pagado), por tanto sigue activo
         map[studentId] = {
           id: null,
           student_id: studentId,
@@ -103,7 +116,7 @@ export const useMonthlyRegistry = () => {
     });
 
     return map;
-  }, [allEntries, selectedMonth]);
+  }, [allEntries, selectedMonth, isMonthClosed]);
 
   const getStudentStatus = (studentId) => {
     return registryMap[studentId]?.status || 'pagado';

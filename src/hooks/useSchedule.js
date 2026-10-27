@@ -1,7 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useSchool } from '../context/SchoolContext';
+import {
+  getMonthSnapshot,
+  saveMonthSnapshot,
+  hasMonthSnapshot,
+} from '../utils/closureSnapshot';
 
 const DAY_NAMES = {
   1: 'Lunes',
@@ -14,7 +19,15 @@ const DAY_NAMES = {
 
 export const useSchedule = () => {
   const { adminId } = useAuth();
-  const { sport, activeCoachId, refreshKey, triggerRefresh } = useSchool();
+  const {
+    sport,
+    activeCoachId,
+    refreshKey,
+    triggerRefresh,
+    selectedMonth,
+    isMonthClosed,
+    isCurrentMonthUnlocked,
+  } = useSchool();
 
   const [slots, setSlots] = useState([]);
   const [enrollments, setEnrollments] = useState([]);
@@ -72,15 +85,43 @@ export const useSchedule = () => {
     fetchSchedule();
   }, [fetchSchedule, refreshKey]);
 
+  const isClosed = Boolean(isMonthClosed?.(selectedMonth));
+  const isLocked = isClosed && !isCurrentMonthUnlocked;
+
+  // Snapshot for closed months
+  const snapshot = useMemo(() => {
+    if (!isLocked || !selectedMonth) return null;
+    return getMonthSnapshot(adminId, selectedMonth);
+  }, [isLocked, selectedMonth, adminId, refreshKey]);
+
+  // Si el mes está cerrado pero todavía no tenía snapshot guardado en esta máquina,
+  // guardamos automáticamente el estado para que quede congelado desde este instante
+  useEffect(() => {
+    if (
+      isLocked &&
+      selectedMonth &&
+      slots.length > 0 &&
+      !hasMonthSnapshot(adminId, selectedMonth)
+    ) {
+      saveMonthSnapshot(adminId, selectedMonth, {
+        slots,
+        enrollments,
+      });
+    }
+  }, [isLocked, selectedMonth, slots, enrollments, adminId]);
+
+  const effectiveAllSlots = isLocked && snapshot?.slots ? snapshot.slots : slots;
+  const effectiveEnrollments =
+    isLocked && snapshot?.enrollments ? snapshot.enrollments : enrollments;
+
   // Filtered slots for WeeklyGrid (if a coach is selected)
   const filteredSlots =
     activeCoachId && activeCoachId !== 'all'
-      ? slots.filter((s) => s.coach_id === activeCoachId)
-      : slots;
+      ? effectiveAllSlots.filter((s) => s.coach_id === activeCoachId)
+      : effectiveAllSlots;
 
   // Group enrollments by class_slot_id
-
-  const enrollmentsBySlotId = enrollments.reduce((acc, enroll) => {
+  const enrollmentsBySlotId = effectiveEnrollments.reduce((acc, enroll) => {
     if (!acc[enroll.class_slot_id]) {
       acc[enroll.class_slot_id] = [];
     }
@@ -550,9 +591,10 @@ export const useSchedule = () => {
 
   return {
     slots: filteredSlots,
-    allSlots: slots,
-    enrollments,
+    allSlots: effectiveAllSlots,
+    enrollments: effectiveEnrollments,
     enrollmentsBySlotId,
+    isScheduleFrozen: isLocked,
     loading,
     error,
     addClassSlot,

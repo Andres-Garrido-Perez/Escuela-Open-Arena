@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useSchool } from '../context/SchoolContext';
+import { saveMonthSnapshot } from '../utils/closureSnapshot';
 
 const generateUUID = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -67,8 +68,14 @@ export const useMonthlyClosures = () => {
     [closures]
   );
 
-  // Close month & freeze figures for all coaches
-  const closeMonth = async (monthYear, coachesData) => {
+  // Close month & freeze figures for all coaches and students
+  // Close month & freeze figures for all coaches, schedules, and students
+  const closeMonth = async (
+    monthYear,
+    coachesData,
+    studentRows = [],
+    extraSnapshotData = {}
+  ) => {
     if (!adminId) throw new Error('Usuario no autenticado');
     if (!monthYear) throw new Error('Mes no especificado');
     if (!coachesData || coachesData.length === 0) {
@@ -132,18 +139,50 @@ export const useMonthlyClosures = () => {
 
       if (upsertErr) throw upsertErr;
 
-      // Limpiar posibles entradas vacías/redundantes de monthly_registry de este mes para evitar corrupción de importes
-      try {
-        await supabase
-          .from('monthly_registry')
-          .delete()
-          .eq('admin_id', adminId)
-          .eq('month_year', monthYear)
-          .eq('status', 'pagado')
-          .or('amount_expected.is.null,amount_expected.eq.0');
-      } catch (cleanErr) {
-        console.warn('Advertencia limpiando registry de mes cerrado:', cleanErr);
+      // Guardar instantánea congelada de todos los alumnos en monthly_registry para este mes cerrado
+      if (studentRows && studentRows.length > 0) {
+        try {
+          const { data: existingRegs } = await supabase
+            .from('monthly_registry')
+            .select('id, student_id')
+            .eq('admin_id', adminId)
+            .eq('month_year', monthYear);
+
+          const existingRegMap = (existingRegs || []).reduce((acc, row) => {
+            acc[row.student_id] = row.id;
+            return acc;
+          }, {});
+
+          const studentEntriesToUpsert = studentRows.map((r) => {
+            const sid = r.student?.id || r.student_id;
+            return {
+              id: existingRegMap[sid] || generateUUID(),
+              admin_id: adminId,
+              student_id: sid,
+              month_year: monthYear,
+              status: r.status || 'pagado',
+              amount_expected: Number(r.price) || 0,
+              notes: r.notes || null,
+            };
+          });
+
+          await supabase
+            .from('monthly_registry')
+            .upsert(studentEntriesToUpsert, { onConflict: 'id' });
+        } catch (snapErr) {
+          console.warn('Aviso guardando snapshot de alumnos del cierre:', snapErr);
+        }
       }
+
+      // Guardar instantánea completa e inmutable en almacenamiento local persistente
+      saveMonthSnapshot(adminId, monthYear, {
+        monthYear,
+        slots: extraSnapshotData.slots || [],
+        enrollments: extraSnapshotData.enrollments || [],
+        studentRows,
+        coachesBreakdown: coachesData,
+        totals: extraSnapshotData.totals || {},
+      });
 
       await fetchClosures();
       if (triggerRefresh) triggerRefresh();

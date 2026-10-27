@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useSchool } from '../../context/SchoolContext';
 import { useStudents } from '../../hooks/useStudents';
 import { useTariffs } from '../../hooks/useTariffs';
@@ -11,6 +12,7 @@ import { CoachSalaryModal } from '../coaches/CoachSalaryModal';
 import { StudentFormModal } from '../students/StudentFormModal';
 import { ConfirmDeleteModal } from '../ui/ConfirmDeleteModal';
 import { resolveStudentTariff } from '../../utils/tariffResolver';
+import { getMonthSnapshot, saveMonthSnapshot } from '../../utils/closureSnapshot';
 import { Badge } from '../ui/Badge';
 import { SearchInput } from '../ui/SearchInput';
 import {
@@ -32,6 +34,7 @@ import { format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 export const MonthlyBillingTable = () => {
+  const { adminId } = useAuth();
   const {
     selectedMonth,
     sport,
@@ -94,10 +97,43 @@ export const MonthlyBillingTable = () => {
     }, {});
   }, [tariffs]);
 
+  const isMonthOfficiallyClosed = Boolean(isMonthClosed?.(selectedMonth));
+  const isMonthLocked = isMonthOfficiallyClosed && !isCurrentMonthUnlocked;
+
+  // Snapshot for closed months
+  const closureSnapshot = useMemo(() => {
+    if (!isMonthLocked || !selectedMonth) return null;
+    return getMonthSnapshot(adminId, selectedMonth);
+  }, [isMonthLocked, selectedMonth, adminId]);
+
   // Map student_id -> { student, tariff, status, price, notes }
   // DEFAULT STATUS IS 'pagado' (a petición del usuario)
   const { rows, rowsByStudentId, totalRecaudado, totalPendiente, totalBajas } =
     useMemo(() => {
+      // Si el mes está cerrado y congelado, y tenemos snapshot guardado de las filas de alumnos:
+      if (isMonthLocked && closureSnapshot?.studentRows && closureSnapshot.studentRows.length > 0) {
+        let recaudado = 0;
+        let pendiente = 0;
+        let bajas = 0;
+        const byStudentId = {};
+
+        closureSnapshot.studentRows.forEach((r) => {
+          const sid = r.student?.id || r.student_id;
+          if (sid) byStudentId[sid] = r;
+          if (r.status === 'pagado') recaudado += Number(r.price) || 0;
+          else if (r.status === 'pendiente') pendiente += Number(r.price) || 0;
+          else if (r.status === 'baja_temporal') bajas += 1;
+        });
+
+        return {
+          rows: closureSnapshot.studentRows,
+          rowsByStudentId: byStudentId,
+          totalRecaudado: recaudado,
+          totalPendiente: pendiente,
+          totalBajas: bajas,
+        };
+      }
+
       let recaudado = 0;
       let pendiente = 0;
       let bajas = 0;
@@ -152,7 +188,32 @@ export const MonthlyBillingTable = () => {
         totalPendiente: pendiente,
         totalBajas: bajas,
       };
-    }, [filteredStudents, registryMap, tariffsById]);
+    }, [
+      isMonthLocked,
+      closureSnapshot,
+      filteredStudents,
+      registryMap,
+      tariffsById,
+      tariffs,
+      allSlots,
+      slots,
+      enrollments,
+    ]);
+
+  // Si el mes está oficialmente cerrado pero aún no tenía studentRows en su snapshot,
+  // congelarlas ahora mismo para proteger este mes cerrado frente a futuros cambios en otros meses
+  useEffect(() => {
+    if (
+      isMonthLocked &&
+      selectedMonth &&
+      rows.length > 0 &&
+      (!closureSnapshot || !closureSnapshot.studentRows)
+    ) {
+      saveMonthSnapshot(adminId, selectedMonth, {
+        studentRows: rows,
+      });
+    }
+  }, [isMonthLocked, selectedMonth, rows, closureSnapshot, adminId]);
 
   const formatMonthShort = (monthStr) => {
     if (!monthStr) return '';
@@ -352,8 +413,83 @@ export const MonthlyBillingTable = () => {
       }
     }
 
-    return { isClosed: true, hasPendingChanges: changed };
-  }, [getClosuresForMonth, selectedMonth, coachesBreakdown]);
+    return {
+      isClosed: true,
+      hasPendingChanges: Boolean(isCurrentMonthUnlocked && changed),
+    };
+  }, [getClosuresForMonth, selectedMonth, coachesBreakdown, isCurrentMonthUnlocked]);
+
+  // Si el mes está cerrado y NO ha sido desbloqueado expresamente en esta sesión,
+  // congelar los totales económicos y desgloses a las cifras oficiales guardadas en el cierre.
+  const monthClosures = getClosuresForMonth(selectedMonth) || [];
+  const hasClosedRecords = isClosed && monthClosures.length > 0;
+
+  const finalTotals = useMemo(() => {
+    if (!hasClosedRecords || isCurrentMonthUnlocked) {
+      return {
+        totalRecaudado,
+        totalCosteMonitores,
+        totalBeneficioEscuela,
+        totalRecaudadoNetoSinIva,
+        coachesBreakdown,
+      };
+    }
+
+    const savedTotalRev = monthClosures.reduce(
+      (sum, c) => sum + (Number(c.total_revenue) || 0),
+      0
+    );
+    const savedTotalCost = monthClosures.reduce(
+      (sum, c) => sum + (Number(c.coach_cost) || 0),
+      0
+    );
+    const savedTotalProfit = monthClosures.reduce(
+      (sum, c) => sum + (Number(c.net_profit) || 0),
+      0
+    );
+
+    const savedByCoach = {};
+    monthClosures.forEach((c) => {
+      savedByCoach[c.coach_id] = {
+        revenue: Number(c.total_revenue || 0),
+        cost: Number(c.coach_cost || 0),
+        profit: Number(c.net_profit || 0),
+      };
+    });
+
+    const frozenBreakdown = (coachesBreakdown || []).map((item) => {
+      const coachId = item.coach?.id || item.coach_id;
+      const saved = savedByCoach[coachId];
+      if (saved) {
+        return {
+          ...item,
+          gross_revenue: saved.revenue,
+          net_revenue: saved.revenue / 1.21,
+          coach_cost: saved.cost,
+          net_margin: saved.profit,
+          marginPct: saved.revenue > 0 ? (saved.profit / (saved.revenue / 1.21)) * 100 : 0,
+        };
+      }
+      return item;
+    });
+
+    return {
+      totalRecaudado: savedTotalRev,
+      totalCosteMonitores: savedTotalCost,
+      totalBeneficioEscuela: savedTotalProfit,
+      totalRecaudadoNetoSinIva: savedTotalRev / 1.21,
+      coachesBreakdown: frozenBreakdown,
+    };
+  }, [
+    hasClosedRecords,
+    isCurrentMonthUnlocked,
+    monthClosures,
+    totalRecaudado,
+    totalCosteMonitores,
+    totalBeneficioEscuela,
+    totalRecaudadoNetoSinIva,
+    coachesBreakdown,
+  ]);
 
   // Map of student_id -> Array of coach objects they have classes with
   const coachesByStudentId = useMemo(() => {
@@ -484,7 +620,7 @@ export const MonthlyBillingTable = () => {
     if (selectedCoachId) {
       const coach = filteredCoaches.find((c) => c.id === selectedCoachId);
       const stats = coachStatsById[selectedCoachId] || { total: 0, activos: 0, bajas: 0, pruebas: 0 };
-      const finance = coachesBreakdown.find((cb) => (cb.coach?.id || cb.coach_id) === selectedCoachId) || {};
+      const finance = finalTotals.coachesBreakdown.find((cb) => (cb.coach?.id || cb.coach_id) === selectedCoachId) || {};
       return {
         label: `Alumnos de ${coach?.name || 'Profesor'}`,
         coachName: coach?.name || 'Profesor',
@@ -507,25 +643,21 @@ export const MonthlyBillingTable = () => {
       activos: rows.filter((r) => r.status !== 'baja_temporal').length,
       bajas: totalBajas,
       pruebas: rows.filter((r) => r.student?.status === 'pendiente_aprobacion').length,
-      gross_revenue: totalRecaudado,
-      net_revenue: totalRecaudadoNetoSinIva,
-      coach_cost: totalCosteMonitores,
-      net_margin: totalBeneficioEscuela,
+      gross_revenue: finalTotals.totalRecaudado,
+      net_revenue: finalTotals.totalRecaudadoNetoSinIva,
+      coach_cost: finalTotals.totalCosteMonitores,
+      net_margin: finalTotals.totalBeneficioEscuela,
     };
   }, [
     selectedCoachId,
     unassignedStats,
     filteredCoaches,
     coachStatsById,
-    coachesBreakdown,
+    finalTotals,
     sport,
     filteredStudents,
     rows,
     totalBajas,
-    totalRecaudado,
-    totalRecaudadoNetoSinIva,
-    totalCosteMonitores,
-    totalBeneficioEscuela,
   ]);
 
   const query = search.trim().toLowerCase();
@@ -896,14 +1028,14 @@ export const MonthlyBillingTable = () => {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-150">
-                {coachesBreakdown.length} Monitores
+                {finalTotals.coachesBreakdown.length} Monitores
               </span>
             </div>
           </div>
 
           {/* Coaches Grid Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {coachesBreakdown.map((item) => {
+            {finalTotals.coachesBreakdown.map((item) => {
               const {
                 coach,
                 slotsCount,
@@ -1061,7 +1193,7 @@ export const MonthlyBillingTable = () => {
               );
             })}
 
-            {coachesBreakdown.length === 0 && (
+            {finalTotals.coachesBreakdown.length === 0 && (
               <div className="col-span-full py-8 text-center text-slate-400 text-xs">
                 No hay monitores registrados para calcular rentabilidad.
               </div>
