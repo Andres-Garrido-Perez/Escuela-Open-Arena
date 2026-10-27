@@ -274,7 +274,7 @@ export const TopNavbar = () => {
         {/* Right: Seed Button & User / Logout (Desktop md+) */}
         <div className="hidden md:flex items-center gap-3">
           {/* Seed Button (CRÍTICO) */}
-          <Button
+          {/* <Button
             variant="outline"
             size="sm"
             loading={isSeeding}
@@ -285,7 +285,7 @@ export const TopNavbar = () => {
             icon={seedSuccess ? CheckCircle2 : Zap}
           >
             {seedSuccess ? '¡Datos Poblados!' : '⚡ Inicializar Datos'}
-          </Button>
+          </Button> */}
 
           {/* User & Sign Out */}
           <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
