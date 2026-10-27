@@ -13,7 +13,7 @@ import { Button } from '../ui/Button';
 import { Users, UserPlus, PanelRightClose } from 'lucide-react';
 
 export const StudentsSidebar = () => {
-  const { setIsStudentsSidebarOpen } = useSchool();
+  const { setIsStudentsSidebarOpen, checkClosedMonthAction } = useSchool();
   const { filteredStudents, addStudent, updateStudent, deleteStudent } =
     useStudents();
   const { tariffs } = useTariffs();
@@ -37,21 +37,31 @@ export const StudentsSidebar = () => {
   };
 
   const handleSaveStudent = async (studentData) => {
-    if (studentToEdit) {
-      return await updateStudent(studentToEdit.id, studentData);
-    } else {
-      return await addStudent(studentData);
-    }
+    return new Promise((resolve, reject) => {
+      checkClosedMonthAction(async () => {
+        try {
+          if (studentToEdit) {
+            resolve(await updateStudent(studentToEdit.id, studentData));
+          } else {
+            resolve(await addStudent(studentData));
+          }
+        } catch (err) {
+          reject(err);
+        }
+      }, studentToEdit ? 'editar este alumno' : 'crear un alumno');
+    });
   };
 
   const handleDeleteStudent = async () => {
     if (!studentToDelete) return;
-    await deleteStudent(studentToDelete.id);
-    setStudentToDelete(null);
-    if (modalOpen && studentToEdit?.id === studentToDelete.id) {
-      setModalOpen(false);
-      setStudentToEdit(null);
-    }
+    checkClosedMonthAction(async () => {
+      await deleteStudent(studentToDelete.id);
+      setStudentToDelete(null);
+      if (modalOpen && studentToEdit?.id === studentToDelete.id) {
+        setModalOpen(false);
+        setStudentToEdit(null);
+      }
+    }, 'eliminar este alumno');
   };
 
   // Filter students by search text and filterType

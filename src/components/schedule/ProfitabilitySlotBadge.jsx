@@ -9,7 +9,7 @@ export const ProfitabilitySlotBadge = ({
   tariffs = [],
   isStudentBaja,
 }) => {
-  // 1. Identify active students in this class slot
+  // 1. Identify active students & breakdown per student
   const tariffsById = tariffs.reduce((acc, t) => {
     acc[t.id] = t;
     return acc;
@@ -17,18 +17,59 @@ export const ProfitabilitySlotBadge = ({
 
   const activeEnrolled = [];
   let bajasCount = 0;
+  let totalCuotasMes = 0;
+  let ingresoBruto = 0;
 
-  enrollments.forEach((enroll) => {
-    const student = allStudents.find((s) => s.id === enroll.student_id);
-    if (!student) return;
+  const studentBreakdown = enrollments
+    .map((enroll) => {
+      const student = allStudents.find((s) => s.id === enroll.student_id);
+      if (!student) return null;
 
-    const isBaja = isStudentBaja ? isStudentBaja(student.id) : false;
-    if (isBaja) {
-      bajasCount += 1;
-    } else {
-      activeEnrolled.push(student);
-    }
-  });
+      const isBaja = isStudentBaja ? isStudentBaja(student.id) : false;
+      if (isBaja) {
+        bajasCount += 1;
+      } else {
+        activeEnrolled.push(student);
+      }
+
+      const tariff =
+        tariffsById[student.tariff_id] ||
+        tariffsById[slot.tariff_id] ||
+        tariffs.find(
+          (t) => t.code && t.code.toLowerCase() === student.tariff_code?.toLowerCase()
+        );
+
+      let monthlyPrice = 0;
+      if (tariff) {
+        monthlyPrice = student.is_member
+          ? Number(tariff.price_member || tariff.price_non_member)
+          : Number(tariff.price_non_member);
+      } else {
+        monthlyPrice = student.is_member ? 45 : 55;
+      }
+
+      const weeklySessions = Math.max(
+        1,
+        Number(student.weekly_hours_contracted) || 1
+      );
+
+      // Precio por sesión de esta clase (asumiendo 4 semanas de mes)
+      const sessionGross = isBaja ? 0 : monthlyPrice / (weeklySessions * 4);
+
+      if (!isBaja) {
+        totalCuotasMes += monthlyPrice;
+        ingresoBruto += sessionGross;
+      }
+
+      return {
+        enrollmentId: enroll.id,
+        student,
+        isBaja,
+        monthlyPrice,
+        sessionGross,
+      };
+    })
+    .filter(Boolean);
 
   // 2. Identify coach & hourly cost
   const coach = coaches.find((c) => c.id === slot.coach_id);
@@ -42,37 +83,6 @@ export const ProfitabilitySlotBadge = ({
   // Coste profesor = coach.hourly_cost * duracion
   const costeProfesor = hourlyCost * durationHours;
 
-  // 3. FÓRMULA MATEMÁTICA OBLIGATORIA:
-  // Paso 1: Ingreso Bruto = Suma (precio tarifa alumno / (sesiones_semanales * 4))
-  let ingresoBruto = 0;
-
-  activeEnrolled.forEach((student) => {
-    const tariff =
-      tariffsById[student.tariff_id] ||
-      tariffsById[slot.tariff_id] ||
-      tariffs.find((t) => t.code && t.code.toLowerCase() === student.tariff_code?.toLowerCase());
-    let monthlyPrice = 0;
-
-    if (tariff) {
-      monthlyPrice = student.is_member
-        ? Number(tariff.price_member || tariff.price_non_member)
-        : Number(tariff.price_non_member);
-    } else {
-      // Fallback estándar si no tiene tarifa fija
-      monthlyPrice = student.is_member ? 45 : 55;
-    }
-
-    // Sesiones semanales que tiene (mínimo 1)
-    const weeklySessions = Math.max(
-      1,
-      Number(student.weekly_hours_contracted) || 1
-    );
-
-    // Precio de este alumno por sesión (asumiendo 4 semanas al mes)
-    const sessionGross = monthlyPrice / (weeklySessions * 4);
-    ingresoBruto += sessionGross;
-  });
-
   // Paso 2: Descuenta el 21% de IVA (Ingreso Neto = Ingreso Bruto / 1.21)
   const ingresoNetoSinIva = ingresoBruto / 1.21;
 
@@ -82,29 +92,96 @@ export const ProfitabilitySlotBadge = ({
 
   return (
     <div className="py-2.5 px-3 bg-slate-50 rounded-xl border border-slate-200/90 flex flex-col justify-between text-xs space-y-2.5">
-      {/* Active Students & Baja notice */}
-      <div className="flex items-center justify-between text-[11px] pb-1.5 border-b border-slate-200/70">
-        <span className="flex items-center gap-1 font-bold text-slate-700">
-          <Users className="w-3.5 h-3.5 text-[#0055A5]" />
-          <span>{activeEnrolled.length} alumnos en pista</span>
-        </span>
+      {/* 1. Tabla de Desglose de Alumnos (Tal como en la imagen del usuario: Nivel en rojo, Cuota Mes, Por Clase y Totales Dorados) */}
+      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-2xs">
+        <div className="bg-rose-50/70 border-b border-rose-200/80 py-1 px-2 text-center">
+          <span className="text-[11px] font-black text-rose-600 tracking-wider uppercase">
+            {slot.level_label || slot.category_name || 'Clase'}
+          </span>
+        </div>
 
-        {bajasCount > 0 ? (
-          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-0.5">
-            <UserX className="w-2.5 h-2.5" />
-            <span>{bajasCount} baja</span>
-          </span>
-        ) : (
-          <span className="text-[10px] text-slate-400">
-            {durationHours}h sesión
-          </span>
-        )}
+        <div className="overflow-x-auto">
+          <table className="w-full text-[10px] sm:text-[11px] border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                <th className="py-1 px-2 text-left">Alumno</th>
+                <th className="py-1 px-2 text-right">Cuota Mes</th>
+                <th className="py-1 px-2 text-right">Por Clase</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {studentBreakdown.map(({ student, isBaja, monthlyPrice, sessionGross }) => (
+                <tr
+                  key={student.id}
+                  className={isBaja ? 'bg-amber-50/40 text-slate-400' : 'hover:bg-slate-50/80'}
+                >
+                  <td
+                    className="py-1 px-2 font-semibold text-slate-800 truncate max-w-[110px]"
+                    title={student.name || student.full_name}
+                  >
+                    {student.name || student.full_name}
+                    {isBaja && (
+                      <span className="ml-1 text-[8px] font-bold text-amber-700 bg-amber-100 px-1 py-0.2 rounded">
+                        Baja
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-1 px-2 text-right font-medium text-slate-600">
+                    {isBaja ? (
+                      <span className="line-through text-slate-400">{monthlyPrice.toFixed(2)} €</span>
+                    ) : (
+                      <span>{monthlyPrice.toFixed(2)} €</span>
+                    )}
+                  </td>
+                  <td className="py-1 px-2 text-right font-bold text-slate-900">
+                    {isBaja ? '0,00 €' : `${sessionGross.toFixed(2)} €`}
+                  </td>
+                </tr>
+              ))}
+              {studentBreakdown.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="py-2.5 text-center text-[10px] text-slate-400 italic">
+                    Sin alumnos inscritos
+                  </td>
+                </tr>
+              )}
+            </tbody>
+            {studentBreakdown.length > 0 && (
+              <tfoot>
+                {/* Fila dorada de Totales (tal como en la imagen del usuario) */}
+                <tr className="bg-amber-400 text-slate-950 font-black border-t-2 border-amber-500">
+                  <td className="py-1 px-2 text-left uppercase text-[9px] tracking-wider">
+                    Total
+                  </td>
+                  <td className="py-1 px-2 text-right text-[10px]">
+                    {totalCuotasMes.toFixed(2)} €
+                  </td>
+                  <td className="py-1 px-2 text-right text-[10px]">
+                    {ingresoBruto.toFixed(2)} €
+                  </td>
+                </tr>
+                {/* Fila dorada de NETO (tal como en la imagen del usuario) */}
+                <tr className="bg-amber-400 text-slate-950 font-black border-t border-amber-300">
+                  <td className="py-1 px-2 text-left uppercase text-[9px] tracking-wider">
+                    NETO
+                  </td>
+                  <td className="py-1 px-2 text-right text-[9px] font-bold text-slate-800">
+                    (Margen)
+                  </td>
+                  <td className="py-1 px-2 text-right text-[11px] font-black">
+                    {beneficioReal >= 0 ? '+' : ''}{beneficioReal.toFixed(2)} €
+                  </td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
       </div>
 
-      {/* Financial Details (Ingreso Bruto -> Neto sin IVA -> Coste Monitor) */}
+      {/* 2. Resumen Financiero Completo (Ingreso Bruto -> Neto sin IVA -> Coste Monitor) */}
       <div className="space-y-1.5 text-slate-600 bg-white p-2 rounded-lg border border-slate-150">
-        <div className="flex items-center justify-between">
-          <span className="text-slate-500 text-[11px]">Ingresos pista (Brutos):</span>
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-slate-500">Ingresos pista (Brutos):</span>
           <span className="font-bold text-slate-900">
             +{ingresoBruto.toFixed(2)} €
           </span>
@@ -117,8 +194,8 @@ export const ProfitabilitySlotBadge = ({
           </span>
         </div>
 
-        <div className="flex items-center justify-between">
-          <span className="text-slate-500 text-[11px]">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-slate-500">
             Coste monitor {coach ? `(${coach.name.split(' ')[0]})` : ''}:
           </span>
           <span className="font-bold text-slate-700">
@@ -127,7 +204,7 @@ export const ProfitabilitySlotBadge = ({
         </div>
       </div>
 
-      {/* Hero Badge: Beneficio Real (Neto sin IVA - Coste monitor) */}
+      {/* Hero Badge: Margen Neto / Beneficio Real */}
       <div
         className={`p-2 rounded-lg border flex items-center justify-between ${
           isPositive
@@ -155,7 +232,6 @@ export const ProfitabilitySlotBadge = ({
           {beneficioReal.toFixed(2)} €
         </span>
       </div>
-
 
       {/* Warning if coach has no hourly cost */}
       {hourlyCost === 0 && (

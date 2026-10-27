@@ -7,7 +7,6 @@ import { useSchedule } from '../../hooks/useSchedule';
 import { useMonthlyRegistry } from '../../hooks/useMonthlyRegistry';
 import { useMonthlyClosures } from '../../hooks/useMonthlyClosures';
 import { MonthlyClosuresHistory } from './MonthlyClosuresHistory';
-import { CloseMonthModal } from './CloseMonthModal';
 import { CoachSalaryModal } from '../coaches/CoachSalaryModal';
 import { StudentFormModal } from '../students/StudentFormModal';
 import { ConfirmDeleteModal } from '../ui/ConfirmDeleteModal';
@@ -33,7 +32,16 @@ import { format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 export const MonthlyBillingTable = () => {
-  const { selectedMonth, sport, showProfitability, toggleProfitability } = useSchool();
+  const {
+    selectedMonth,
+    sport,
+    showProfitability,
+    toggleProfitability,
+    openProfitabilityModal,
+    checkClosedMonthAction,
+    isCurrentMonthUnlocked,
+    lockMonthEditing,
+  } = useSchool();
   const { filteredStudents, updateStudent, deleteStudent } = useStudents();
   const { tariffs } = useTariffs();
   const { filteredCoaches, updateCoach } = useCoaches();
@@ -43,9 +51,9 @@ export const MonthlyBillingTable = () => {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('todos');
+  const [selectedCoachId, setSelectedCoachId] = useState(null); // null = Todos los monitores
   const [showCoachesBreakdown, setShowCoachesBreakdown] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
-  const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [salaryModalOpen, setSalaryModalOpen] = useState(false);
   const [coachForSalary, setCoachForSalary] = useState(null);
   const [studentToEdit, setStudentToEdit] = useState(null);
@@ -53,11 +61,13 @@ export const MonthlyBillingTable = () => {
 
   const handleDeleteStudent = async () => {
     if (!studentToDelete) return;
-    await deleteStudent(studentToDelete.id);
-    setStudentToDelete(null);
-    if (studentToEdit?.id === studentToDelete.id) {
-      setStudentToEdit(null);
-    }
+    checkClosedMonthAction(async () => {
+      await deleteStudent(studentToDelete.id);
+      setStudentToDelete(null);
+      if (studentToEdit?.id === studentToDelete.id) {
+        setStudentToEdit(null);
+      }
+    }, 'eliminar este alumno');
   };
 
   const handleOpenSalary = (coach) => {
@@ -66,11 +76,9 @@ export const MonthlyBillingTable = () => {
   };
 
   const handleSaveSalary = async (coachId, hourlyCost) => {
-    await updateCoach(coachId, { hourly_cost: hourlyCost });
-  };
-
-  const handleConfirmCloseMonth = async () => {
-    await closeMonth(selectedMonth, coachesBreakdown);
+    checkClosedMonthAction(async () => {
+      await updateCoach(coachId, { hourly_cost: hourlyCost });
+    }, 'modificar el precio/hora del monitor');
   };
 
   // Month title formatted
@@ -213,6 +221,8 @@ export const MonthlyBillingTable = () => {
 
         const uniqueStudentIds = new Set(coachEnrollments.map((e) => e.student_id));
         let activeStudentsCount = 0;
+        let bajasCount = 0;
+        let pruebaCount = 0;
         let revenue = 0;
 
         coachEnrollments.forEach((enroll) => {
@@ -230,8 +240,15 @@ export const MonthlyBillingTable = () => {
 
         uniqueStudentIds.forEach((sid) => {
           const studentRow = rowsByStudentId[sid];
-          if (studentRow && studentRow.status !== 'baja_temporal') {
-            activeStudentsCount += 1;
+          if (studentRow) {
+            if (studentRow.status === 'baja_temporal') {
+              bajasCount += 1;
+            } else {
+              activeStudentsCount += 1;
+            }
+            if (studentRow.student?.status === 'pendiente_aprobacion') {
+              pruebaCount += 1;
+            }
           }
         });
 
@@ -254,7 +271,10 @@ export const MonthlyBillingTable = () => {
           weeklyHours,
           monthlyHours,
           hourlyRate,
+          totalStudentsCount: uniqueStudentIds.size,
           activeStudentsCount,
+          bajasCount,
+          pruebaCount,
           gross_revenue,
           net_revenue,
           coach_cost,
@@ -334,7 +354,178 @@ export const MonthlyBillingTable = () => {
     return { isClosed: true, hasPendingChanges: changed };
   }, [getClosuresForMonth, selectedMonth, coachesBreakdown]);
 
+  // Map of student_id -> Array of coach objects they have classes with
+  const coachesByStudentId = useMemo(() => {
+    const effectiveSlots = allSlots || slots;
+    const coachMap = (filteredCoaches || []).reduce((acc, c) => {
+      acc[c.id] = c;
+      return acc;
+    }, {});
+    const slotMap = (effectiveSlots || []).reduce((acc, s) => {
+      acc[s.id] = s;
+      return acc;
+    }, {});
 
+    const map = {};
+    (enrollments || []).forEach((e) => {
+      const slot = slotMap[e.class_slot_id];
+      if (slot?.coach_id && coachMap[slot.coach_id]) {
+        if (!map[e.student_id]) map[e.student_id] = new Map();
+        map[e.student_id].set(slot.coach_id, coachMap[slot.coach_id]);
+      }
+    });
+
+    const result = {};
+    Object.keys(map).forEach((sid) => {
+      result[sid] = Array.from(map[sid].values());
+    });
+    return result;
+  }, [allSlots, slots, enrollments, filteredCoaches]);
+
+  // Map of coach_id -> Set of student_ids enrolled in their classes
+  const studentsByCoachId = useMemo(() => {
+    const map = {};
+    filteredCoaches.forEach((c) => {
+      map[c.id] = new Set();
+    });
+    const effectiveSlots = allSlots || slots;
+    const slotMap = (effectiveSlots || []).reduce((acc, s) => {
+      acc[s.id] = s;
+      return acc;
+    }, {});
+
+    (enrollments || []).forEach((e) => {
+      const slot = slotMap[e.class_slot_id];
+      if (slot?.coach_id && map[slot.coach_id]) {
+        map[slot.coach_id].add(e.student_id);
+      }
+    });
+    return map;
+  }, [filteredCoaches, allSlots, slots, enrollments]);
+
+  // Unassigned student IDs (alumnos without any coach assigned)
+  const unassignedStudentIds = useMemo(() => {
+    const allAssigned = new Set();
+    Object.values(studentsByCoachId).forEach((set) => {
+      set.forEach((id) => allAssigned.add(id));
+    });
+    return new Set(filteredStudents.filter((s) => !allAssigned.has(s.id)).map((s) => s.id));
+  }, [studentsByCoachId, filteredStudents]);
+
+  // Stats for each coach
+  const coachStatsById = useMemo(() => {
+    const stats = {};
+    filteredCoaches.forEach((coach) => {
+      const studentIds = studentsByCoachId[coach.id] || new Set();
+      let total = 0;
+      let activos = 0;
+      let bajas = 0;
+      let pruebas = 0;
+
+      studentIds.forEach((sid) => {
+        const row = rowsByStudentId[sid];
+        total += 1;
+        if (row?.status === 'baja_temporal') {
+          bajas += 1;
+        } else {
+          activos += 1;
+        }
+        if (row?.student?.status === 'pendiente_aprobacion') {
+          pruebas += 1;
+        }
+      });
+
+      stats[coach.id] = { total, activos, bajas, pruebas };
+    });
+    return stats;
+  }, [filteredCoaches, studentsByCoachId, rowsByStudentId]);
+
+  // Stats for unassigned students
+  const unassignedStats = useMemo(() => {
+    let total = 0;
+    let activos = 0;
+    let bajas = 0;
+    let pruebas = 0;
+
+    unassignedStudentIds.forEach((sid) => {
+      const row = rowsByStudentId[sid];
+      total += 1;
+      if (row?.status === 'baja_temporal') {
+        bajas += 1;
+      } else {
+        activos += 1;
+      }
+      if (row?.student?.status === 'pendiente_aprobacion') {
+        pruebas += 1;
+      }
+    });
+
+    return { total, activos, bajas, pruebas };
+  }, [unassignedStudentIds, rowsByStudentId]);
+
+  // Metrics for active selection (All coaches or specific coach)
+  const currentMetrics = useMemo(() => {
+    if (selectedCoachId === 'unassigned') {
+      return {
+        label: 'Alumnos Sin Monitor Asignado',
+        coachName: 'Sin Monitor',
+        color: '#D97706',
+        total: unassignedStats.total,
+        activos: unassignedStats.activos,
+        bajas: unassignedStats.bajas,
+        pruebas: unassignedStats.pruebas,
+        gross_revenue: 0,
+        net_revenue: 0,
+        coach_cost: 0,
+        net_margin: 0,
+      };
+    }
+    if (selectedCoachId) {
+      const coach = filteredCoaches.find((c) => c.id === selectedCoachId);
+      const stats = coachStatsById[selectedCoachId] || { total: 0, activos: 0, bajas: 0, pruebas: 0 };
+      const finance = coachesBreakdown.find((cb) => (cb.coach?.id || cb.coach_id) === selectedCoachId) || {};
+      return {
+        label: `Alumnos de ${coach?.name || 'Profesor'}`,
+        coachName: coach?.name || 'Profesor',
+        color: coach?.color_theme || '#0055A5',
+        total: stats.total,
+        activos: stats.activos,
+        bajas: stats.bajas,
+        pruebas: stats.pruebas,
+        gross_revenue: finance.gross_revenue || 0,
+        net_revenue: finance.net_revenue || 0,
+        coach_cost: finance.coach_cost || 0,
+        net_margin: finance.net_margin || 0,
+      };
+    }
+    return {
+      label: `Escuela de ${sport === 'tenis' ? 'Tenis' : 'Pádel'} (Todos los Monitores)`,
+      coachName: 'Todos los Monitores',
+      color: '#0055A5',
+      total: filteredStudents.length,
+      activos: rows.filter((r) => r.status !== 'baja_temporal').length,
+      bajas: totalBajas,
+      pruebas: rows.filter((r) => r.student?.status === 'pendiente_aprobacion').length,
+      gross_revenue: totalRecaudado,
+      net_revenue: totalRecaudadoNetoSinIva,
+      coach_cost: totalCosteMonitores,
+      net_margin: totalBeneficioEscuela,
+    };
+  }, [
+    selectedCoachId,
+    unassignedStats,
+    filteredCoaches,
+    coachStatsById,
+    coachesBreakdown,
+    sport,
+    filteredStudents,
+    rows,
+    totalBajas,
+    totalRecaudado,
+    totalRecaudadoNetoSinIva,
+    totalCosteMonitores,
+    totalBeneficioEscuela,
+  ]);
 
   const query = search.trim().toLowerCase();
   const filteredRows = rows.filter(({ student, status }) => {
@@ -347,15 +538,25 @@ export const MonthlyBillingTable = () => {
     if (statusFilter === 'activos' && status === 'baja_temporal') return false;
     if (statusFilter === 'bajas' && status !== 'baja_temporal') return false;
 
+    // Filter by selectedCoachId
+    if (selectedCoachId === 'unassigned') {
+      if (!unassignedStudentIds.has(student.id)) return false;
+    } else if (selectedCoachId) {
+      const coachStudents = studentsByCoachId[selectedCoachId];
+      if (!coachStudents || !coachStudents.has(student.id)) return false;
+    }
+
     return true;
   });
 
   const handleStatusChange = async (studentId, newStatus, currentPrice) => {
-    try {
-      await setStudentStatus(studentId, newStatus, currentPrice);
-    } catch (err) {
-      alert('Error actualizando estado del alumno: ' + err.message);
-    }
+    checkClosedMonthAction(async () => {
+      try {
+        await setStudentStatus(studentId, newStatus, currentPrice);
+      } catch (err) {
+        alert('Error actualizando estado del alumno: ' + err.message);
+      }
+    }, `cambiar estado a "${newStatus.replace('_', ' ')}"`);
   };
 
   return (
@@ -380,78 +581,149 @@ export const MonthlyBillingTable = () => {
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-            {/* Opciones financieras solo visibles cuando Rentabilidad está desbloqueada */}
-            {showProfitability && (
-              <>
-                {/* Botón Cerrar Mes */}
-                <button
-                  type="button"
-                  onClick={() => setCloseModalOpen(true)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
-                    !isClosed
-                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                      : hasPendingChanges
-                      ? 'bg-slate-900 text-amber-300 border border-amber-400 hover:bg-slate-800'
-                      : 'bg-slate-900 text-white hover:bg-slate-800'
-                  }`}
-                  title={
-                    !isClosed
-                      ? 'Congelar y guardar en el histórico los beneficios de este mes'
-                      : hasPendingChanges
-                      ? 'Se detectaron modificaciones contables respecto al cierre guardado. Haz clic para actualizar el histórico.'
-                      : 'El mes está cerrado y al día con el histórico congelado'
-                  }
-                >
-                  {!isClosed ? (
-                    <>
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>Cerrar Mes y Guardar Histórico</span>
-                    </>
-                  ) : hasPendingChanges ? (
-                    <>
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                      <span>Mes Cerrado (Actualizar cambios)</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Mes Cerrado</span>
-                    </>
-                  )}
-                </button>
-
-                {/* Botón Histórico de Beneficios */}
-                <button
-                  type="button"
-                  onClick={() => setShowHistory(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all shadow-xs cursor-pointer bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                  title="Ver histórico de meses cerrados y beneficios pasados"
-                >
-                  <History className="w-3.5 h-3.5 text-[#0055A5]" />
-                  <span>Histórico Beneficios</span>
-                </button>
-              </>
-            )}
+            {/* Botón Histórico de Beneficios (Requiere contraseña para acceder al histórico contable) */}
+            <button
+              type="button"
+              onClick={() => {
+                if (showProfitability) {
+                  setShowHistory(true);
+                } else {
+                  openProfitabilityModal(() => setShowHistory(true));
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all shadow-xs cursor-pointer bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+              title={
+                showProfitability
+                  ? 'Ver histórico de meses cerrados y beneficios pasados'
+                  : 'Requiere contraseña para consultar el histórico de beneficios'
+              }
+            >
+              {showProfitability ? (
+                <History className="w-3.5 h-3.5 text-[#0055A5]" />
+              ) : (
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+              )}
+              <span>Histórico Beneficios</span>
+              {!showProfitability && (
+                <span className="text-[10px] bg-slate-100 text-slate-500 px-1 py-0.2 rounded font-medium ml-0.5">
+                  PIN
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
-        {/* Global Summary Cards: Condicional a showProfitability */}
+        {/* SELECTOR DE MONITOR / FILTRO POR PROFESOR */}
+        <div className="mb-3.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1 flex items-center gap-1 shrink-0">
+            <Users className="w-3.5 h-3.5 text-[#0055A5]" />
+            <span>Monitores:</span>
+          </span>
+
+          {/* Tab Todos los Monitores (Totales) */}
+          <button
+            type="button"
+            onClick={() => setSelectedCoachId(null)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border ${
+              selectedCoachId === null
+                ? 'bg-[#0055A5] text-white border-[#0055A5] shadow-xs'
+                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Todos ({filteredStudents.length} alumnos)
+          </button>
+
+          {/* Tabs por cada profesor */}
+          {filteredCoaches.map((coach) => {
+            const stats = coachStatsById[coach.id] || { total: 0, activos: 0, bajas: 0, pruebas: 0 };
+            const isSelected = selectedCoachId === coach.id;
+            const colorDot = coach.color_theme || '#0055A5';
+
+            return (
+              <button
+                key={coach.id}
+                type="button"
+                onClick={() => setSelectedCoachId(isSelected ? null : coach.id)}
+                className={`group flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border select-none shrink-0 ${
+                  isSelected
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-white/50"
+                  style={{ backgroundColor: colorDot }}
+                />
+                <span>{coach.name}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-md font-extrabold ${
+                    isSelected
+                      ? 'bg-slate-800 text-slate-200'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {stats.total}
+                </span>
+              </button>
+            );
+          })}
+
+          {/* Tab Sin Monitor Asignado (si existen) */}
+          {unassignedStats.total > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelectedCoachId(selectedCoachId === 'unassigned' ? null : 'unassigned')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border ${
+                selectedCoachId === 'unassigned'
+                  ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                  : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50'
+              }`}
+            >
+              Sin Monitor ({unassignedStats.total})
+            </button>
+          )}
+        </div>
+
+        {/* Banner informativo cuando hay un monitor filtrado */}
+        {selectedCoachId && (
+          <div className="mb-3.5 bg-sky-50/80 border border-sky-200 rounded-xl px-3.5 py-2 flex items-center justify-between text-xs text-sky-950">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: currentMetrics.color }} />
+              <span>
+                Mostrando datos y alumnos de:{' '}
+                <strong className="font-black text-slate-900">{currentMetrics.coachName}</strong>{' '}
+                <span className="text-slate-500 font-medium">
+                  ({currentMetrics.total} alumnos: {currentMetrics.activos} activos, {currentMetrics.bajas} bajas, {currentMetrics.pruebas} en prueba)
+                </span>
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedCoachId(null)}
+              className="text-xs font-bold text-[#0055A5] hover:text-blue-900 hover:underline cursor-pointer"
+            >
+              ✕ Ver todos los monitores
+            </button>
+          </div>
+        )}
+
+        {/* Global Summary Cards: Condicional a showProfitability (Con soporte de filtro por profesor) */}
         {showProfitability ? (
           /* Vista Rentabilidad Desbloqueada: 5 métricas financieras */
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3">
             {/* Total Alumnos */}
             <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200 shadow-xs">
               <div className="flex items-center justify-between text-slate-400 mb-1">
-                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Alumnos Totales
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 truncate">
+                  Alumnos {selectedCoachId ? `(${currentMetrics.coachName})` : 'Totales'}
                 </span>
-                <Users className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-[#0055A5]" />
+                <Users className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-[#0055A5] shrink-0" />
               </div>
               <div className="text-lg sm:text-xl font-black text-slate-900">
-                {filteredStudents.length}
+                {currentMetrics.total}
               </div>
-              <span className="text-[9px] sm:text-[10px] text-slate-400">
-                Escuela de {sport}
+              <span className="text-[9px] sm:text-[10px] text-slate-400 truncate block">
+                {currentMetrics.activos} activos • {currentMetrics.bajas} bajas
               </span>
             </div>
 
@@ -464,7 +736,7 @@ export const MonthlyBillingTable = () => {
                 <CheckCircle2 className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-emerald-600" />
               </div>
               <div className="text-lg sm:text-xl font-black text-emerald-700 truncate">
-                {totalRecaudado.toFixed(2)} €
+                {currentMetrics.gross_revenue.toFixed(2)} €
               </div>
               <span className="text-[9px] sm:text-[10px] text-emerald-600 font-medium">
                 Con IVA incluido
@@ -480,7 +752,7 @@ export const MonthlyBillingTable = () => {
                 <TrendingUp className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-slate-500" />
               </div>
               <div className="text-lg sm:text-xl font-black text-slate-900 truncate">
-                {totalRecaudadoNetoSinIva.toFixed(2)} €
+                {currentMetrics.net_revenue.toFixed(2)} €
               </div>
               <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium">
                 Ingreso real club
@@ -490,13 +762,13 @@ export const MonthlyBillingTable = () => {
             {/* Coste Total Monitores */}
             <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200 shadow-xs">
               <div className="flex items-center justify-between text-slate-500 mb-1">
-                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
-                  Nómina Monitores
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider truncate">
+                  Nómina {selectedCoachId ? currentMetrics.coachName : 'Monitores'}
                 </span>
-                <Briefcase className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-slate-500" />
+                <Briefcase className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-slate-500 shrink-0" />
               </div>
               <div className="text-lg sm:text-xl font-black text-slate-800 truncate">
-                -{totalCosteMonitores.toFixed(2)} €
+                -{currentMetrics.coach_cost.toFixed(2)} €
               </div>
               <span className="text-[9px] sm:text-[10px] text-slate-400">
                 Coste mensual
@@ -506,26 +778,26 @@ export const MonthlyBillingTable = () => {
             {/* Beneficio Neto Escuela: Spans 2 cols on mobile */}
             <div
               className={`col-span-2 lg:col-span-1 p-3 sm:p-3.5 rounded-2xl border shadow-xs ${
-                totalBeneficioEscuela >= 0
+                currentMetrics.net_margin >= 0
                   ? 'bg-sky-50/50 border-sky-200'
                   : 'bg-rose-50/50 border-rose-200'
               }`}
             >
               <div className="flex items-center justify-between text-[#0055A5] mb-1">
                 <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider">
-                  Margen Neto Real Club
+                  Margen Neto Club
                 </span>
                 <TrendingUp className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-[#0055A5]" />
               </div>
               <div
                 className={`text-lg sm:text-xl font-black ${
-                  totalBeneficioEscuela >= 0
+                  currentMetrics.net_margin >= 0
                     ? 'text-[#0055A5]'
                     : 'text-rose-700'
                 }`}
               >
-                {totalBeneficioEscuela >= 0 ? '+' : ''}
-                {totalBeneficioEscuela.toFixed(2)} €
+                {currentMetrics.net_margin >= 0 ? '+' : ''}
+                {currentMetrics.net_margin.toFixed(2)} €
               </div>
               <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium">
                 Base sin IVA - Nóminas
@@ -533,21 +805,21 @@ export const MonthlyBillingTable = () => {
             </div>
           </div>
         ) : (
-          /* Vista Rentabilidad Bloqueada: Solo métricas de Alumnos */
+          /* Vista Normal / Directorio: Solo métricas de Alumnos (Totales o del Profesor seleccionado) */
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
             {/* Total Alumnos */}
             <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200 shadow-xs">
               <div className="flex items-center justify-between text-slate-400 mb-1">
-                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Total Alumnos
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 truncate">
+                  Total Alumnos {selectedCoachId ? `(${currentMetrics.coachName})` : ''}
                 </span>
-                <Users className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-[#0055A5]" />
+                <Users className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-[#0055A5] shrink-0" />
               </div>
               <div className="text-lg sm:text-xl font-black text-slate-900">
-                {filteredStudents.length}
+                {currentMetrics.total}
               </div>
-              <span className="text-[9px] sm:text-[10px] text-slate-400">
-                Inscritos en escuela de {sport}
+              <span className="text-[9px] sm:text-[10px] text-slate-400 truncate block">
+                {selectedCoachId ? `Asignados a ${currentMetrics.coachName}` : `Inscritos en escuela de ${sport}`}
               </span>
             </div>
 
@@ -560,7 +832,7 @@ export const MonthlyBillingTable = () => {
                 <CheckCircle2 className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-emerald-600" />
               </div>
               <div className="text-lg sm:text-xl font-black text-emerald-700">
-                {rows.filter((r) => r.status !== 'baja_temporal').length}
+                {currentMetrics.activos}
               </div>
               <span className="text-[9px] sm:text-[10px] text-emerald-600 font-medium">
                 En clases regulares
@@ -576,7 +848,7 @@ export const MonthlyBillingTable = () => {
                 <UserX className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-rose-500" />
               </div>
               <div className="text-lg sm:text-xl font-black text-rose-700">
-                {totalBajas}
+                {currentMetrics.bajas}
               </div>
               <span className="text-[9px] sm:text-[10px] text-rose-500 font-medium">
                 Mes de {formattedMonth}
@@ -592,7 +864,7 @@ export const MonthlyBillingTable = () => {
                 <Clock className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-amber-500" />
               </div>
               <div className="text-lg sm:text-xl font-black text-amber-700">
-                {rows.filter((r) => r.student?.status === 'pendiente_aprobacion').length}
+                {currentMetrics.pruebas}
               </div>
               <span className="text-[9px] sm:text-[10px] text-amber-600 font-medium">
                 Pendientes de confirmación
@@ -602,23 +874,30 @@ export const MonthlyBillingTable = () => {
         )}
       </div>
 
-      {/* SECTION: DESGLOSE DE RENTABILIDAD POR MONITOR */}
-      {showProfitability && showCoachesBreakdown && (
+      {/* SECTION: DESGLOSE POR MONITOR (Visible SOLO cuando se está en "Todos los Monitores") */}
+      {showCoachesBreakdown && selectedCoachId === null && (
         <div className="mb-6 bg-white rounded-2xl border border-slate-200 shadow-xs p-5">
           <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
             <div>
               <h2 className="text-sm font-black text-slate-800 uppercase tracking-tight m-0 flex items-center gap-2">
-                <Briefcase className="w-4 h-4 text-[#0055A5]" />
-                <span>Desglose de Rentabilidad por Monitor</span>
+                <Users className="w-4 h-4 text-[#0055A5]" />
+                <span>
+                  {showProfitability
+                    ? 'Desglose de Alumnos y Rentabilidad por Monitor'
+                    : 'Desglose de Alumnos por Monitor'}
+                </span>
               </h2>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Ingresos brutos generados por sus alumnos activos vs coste de
-                sus horas de pista en {formattedMonth}.
+                {showProfitability
+                  ? `Alumnos totales, activos, bajas, horas y margen neto generado por cada monitor en ${formattedMonth}.`
+                  : `Alumnos totales, activos, en prueba y bajas temporales asignados a cada monitor en ${formattedMonth}.`}
               </p>
             </div>
-            <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-150">
-              {coachesBreakdown.length} Monitores en activo
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-150">
+                {coachesBreakdown.length} Monitores
+              </span>
+            </div>
           </div>
 
           {/* Coaches Grid Cards */}
@@ -630,7 +909,10 @@ export const MonthlyBillingTable = () => {
                 weeklyHours,
                 monthlyHours,
                 hourlyRate,
+                totalStudentsCount,
                 activeStudentsCount,
+                bajasCount,
+                pruebaCount,
                 gross_revenue,
                 net_revenue,
                 coach_cost,
@@ -644,9 +926,9 @@ export const MonthlyBillingTable = () => {
               return (
                 <div
                   key={coach.id}
-                  className="bg-slate-50/70 rounded-xl border border-slate-200/90 p-4 flex flex-col justify-between hover:border-slate-300 hover:bg-slate-50 transition-all"
+                  className="rounded-xl border border-slate-200/90 bg-slate-50/70 p-4 transition-all hover:border-slate-300 hover:bg-slate-50 shadow-2xs"
                 >
-                  {/* Top: Name & Color */}
+                  {/* Top: Name, Color & Badge */}
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-3">
                       <div className="flex items-center gap-2">
@@ -659,105 +941,121 @@ export const MonthlyBillingTable = () => {
                         </span>
                       </div>
 
-                      <Badge
-                        variant={isPositive ? 'green' : 'red'}
-                        size="xs"
-                        className="font-bold"
-                      >
-                        {marginPct.toFixed(0)}% Margen
-                      </Badge>
+                      {showProfitability ? (
+                        <Badge
+                          variant={isPositive ? 'green' : 'red'}
+                          size="xs"
+                          className="font-bold"
+                        >
+                          {marginPct.toFixed(0)}% Margen
+                        </Badge>
+                      ) : (
+                        <span className="text-[11px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                          {slotsCount} clases • {weeklyHours}h/sem
+                        </span>
+                      )}
                     </div>
 
-                    {/* Stat Badges */}
-                    <div className="grid grid-cols-2 gap-2 text-xs mb-3">
-                      <div className="bg-white p-2 rounded-lg border border-slate-150">
-                        <span className="text-[10px] text-slate-400 uppercase font-semibold block">
-                          Alumnos Activos
+                    {/* Stat Badges: Total Alumnos, Activos, Bajas, Pruebas */}
+                    <div className={`grid grid-cols-4 gap-1.5 text-center ${showProfitability ? 'mb-2.5' : 'mb-0'}`}>
+                      <div className="bg-white p-2 rounded-lg border border-slate-200/80 shadow-2xs">
+                        <span className="text-[9px] text-slate-400 uppercase font-bold block">
+                          Total
                         </span>
-                        <span className="font-black text-slate-800">
-                          {activeStudentsCount} alumnos
+                        <span className="font-black text-slate-900 text-sm">
+                          {totalStudentsCount}
                         </span>
+                        <span className="text-[8px] text-slate-400 block">alumnos</span>
                       </div>
 
-                      <div className="bg-white p-2 rounded-lg border border-slate-150">
-                        <span className="text-[10px] text-slate-400 uppercase font-semibold block">
-                          Clases y Horas
+                      <div className="bg-emerald-50/60 p-2 rounded-lg border border-emerald-200/80 shadow-2xs">
+                        <span className="text-[9px] text-emerald-700 uppercase font-bold block">
+                          Activos
                         </span>
-                        <span className="font-black text-slate-800">
-                          {slotsCount} clases • {weeklyHours}h/sem ({monthlyHours}h/mes)
+                        <span className="font-black text-emerald-700 text-sm">
+                          {activeStudentsCount}
                         </span>
+                        <span className="text-[8px] text-emerald-600 block">en pista</span>
+                      </div>
+
+                      <div className="bg-rose-50/60 p-2 rounded-lg border border-rose-200/80 shadow-2xs">
+                        <span className="text-[9px] text-rose-700 uppercase font-bold block">
+                          Bajas
+                        </span>
+                        <span className="font-black text-rose-700 text-sm">
+                          {bajasCount}
+                        </span>
+                        <span className="text-[8px] text-rose-600 block">temporales</span>
+                      </div>
+
+                      <div className="bg-amber-50/60 p-2 rounded-lg border border-amber-200/80 shadow-2xs">
+                        <span className="text-[9px] text-amber-700 uppercase font-bold block">
+                          Prueba
+                        </span>
+                        <span className="font-black text-amber-700 text-sm">
+                          {pruebaCount}
+                        </span>
+                        <span className="text-[8px] text-amber-600 block">pendientes</span>
                       </div>
                     </div>
 
-                    {/* Financial Equation: Ingresos Brutos -> Neto sin IVA -> Coste -> Margen Neto */}
-                    <div className="space-y-2 py-2.5 px-3 bg-white rounded-lg border border-slate-150 text-xs">
-                      {/* 1. Ingresos generados (Brutos) */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-600 font-medium">
-                          Ingresos generados (Brutos):
-                        </span>
-                        <span className="font-bold text-slate-900">
-                          +{gross_revenue.toFixed(2)} €
-                        </span>
-                      </div>
-
-                      {/* 2. Ingresos netos sin IVA (desglose) */}
-                      <div className="flex items-center justify-between text-[11px] text-slate-500 bg-slate-50/80 px-2 py-1 rounded border border-slate-100">
-                        <span>Base neta (sin 21% IVA):</span>
-                        <span className="font-semibold text-slate-700">
-                          {net_revenue.toFixed(2)} €
-                        </span>
-                      </div>
-
-                      {/* 3. Coste monitor */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-600 font-medium flex items-center gap-1">
-                          Coste monitor{' '}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenSalary(coach)}
-                            className="inline-flex items-center gap-0.5 text-[10px] text-[#0055A5] hover:underline font-bold cursor-pointer"
-                            title="Haz clic para editar el sueldo / coste por hora de este monitor"
-                          >
-                            <span>({weeklyHours}h/sem × 4s × {hourlyRate}€/h)</span>
-                            <Edit2 className="w-2.5 h-2.5 ml-0.5" />
-                          </button>
-                          :
-                        </span>
-                        <span className="font-bold text-slate-700">
-                          -{coach_cost.toFixed(2)} €
-                        </span>
-                      </div>
-
-                      {/* 4. Margen Neto (Ingreso sin IVA - coste monitor) */}
-                      <div className="pt-2 border-t border-slate-150 flex items-center justify-between font-black">
-                        <div>
-                          <span className="text-slate-900 block">Margen Neto:</span>
-                          <span className="text-[10px] text-slate-400 font-normal">
-                            Base neta - Nómina
+                    {/* Financial Equation: Solo cuando Vista Rentabilidad está activa */}
+                    {showProfitability && (
+                      <div className="space-y-2 py-2.5 px-3 bg-white rounded-lg border border-slate-150 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-600 font-medium">
+                            Ingresos generados (Brutos):
+                          </span>
+                          <span className="font-bold text-slate-900">
+                            +{gross_revenue.toFixed(2)} €
                           </span>
                         </div>
-                        <span
-                          className={`text-base font-black ${
-                            isPositive ? 'text-emerald-700' : 'text-rose-600'
-                          }`}
-                        >
-                          {isPositive ? '+' : ''}
-                          {net_margin.toFixed(2)} €
-                        </span>
-                      </div>
-                    </div>
-                  </div>
 
-                  {hourlyRate === 0 && (
-                    <button
-                      type="button"
-                      onClick={() => handleOpenSalary(coach)}
-                      className="text-[10px] text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 px-2 py-1 rounded-lg mt-2 block w-full text-center font-bold cursor-pointer transition-colors"
-                    >
-                      ✏️ Asignar sueldo/hora a {coach.name} para calcular nómina
-                    </button>
-                  )}
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 bg-slate-50/80 px-2 py-1 rounded border border-slate-100">
+                          <span>Base neta (sin 21% IVA):</span>
+                          <span className="font-semibold text-slate-700">
+                            {net_revenue.toFixed(2)} €
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-600 font-medium flex items-center gap-1">
+                            Coste monitor{' '}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenSalary(coach)}
+                              className="inline-flex items-center gap-0.5 text-[10px] text-[#0055A5] hover:underline font-bold cursor-pointer"
+                              title="Haz clic para editar el sueldo / coste por hora de este monitor"
+                            >
+                              <span>({weeklyHours}h/sem × 4s × {hourlyRate}€/h)</span>
+                              <Edit2 className="w-2.5 h-2.5 ml-0.5" />
+                            </button>
+                            :
+                          </span>
+                          <span className="font-bold text-slate-700">
+                            -{coach_cost.toFixed(2)} €
+                          </span>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-150 flex items-center justify-between font-black">
+                          <div>
+                            <span className="text-slate-900 block">Margen Neto:</span>
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              Base neta - Nómina
+                            </span>
+                          </div>
+                          <span
+                            className={`text-base font-black ${
+                              isPositive ? 'text-emerald-700' : 'text-rose-600'
+                            }`}
+                          >
+                            {isPositive ? '+' : ''}
+                            {net_margin.toFixed(2)} €
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -829,6 +1127,7 @@ export const MonthlyBillingTable = () => {
             const isBaja = status === 'baja_temporal';
             const cleanPhone = student.phone ? student.phone.replace(/[^0-9]/g, '') : '';
             const isPrueba = student.status === 'pendiente_aprobacion';
+            const studentCoaches = coachesByStudentId[student.id] || [];
 
             return (
               <div
@@ -880,6 +1179,33 @@ export const MonthlyBillingTable = () => {
                         </>
                       )}
                     </div>
+
+                    {/* Assigned Coaches */}
+                    {studentCoaches.length > 0 ? (
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        {studentCoaches.map((c) => (
+                          <span
+                            key={c.id}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border"
+                            style={{
+                              backgroundColor: c.color_theme ? `${c.color_theme}15` : '#f1f5f9',
+                              borderColor: c.color_theme ? `${c.color_theme}40` : '#cbd5e1',
+                              color: c.color_theme || '#475569',
+                            }}
+                          >
+                            <span
+                              className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{ backgroundColor: c.color_theme || '#64748b' }}
+                            />
+                            <span>{c.name}</span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-1">
+                        <span className="text-[10px] text-slate-400 italic">Sin monitor asignado</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Monthly Amount */}
@@ -986,6 +1312,7 @@ export const MonthlyBillingTable = () => {
                 <th className="py-3 px-4">Teléfono</th>
                 <th className="py-3 px-4">Abonado</th>
                 <th className="py-3 px-4">Tarifa / Plan</th>
+                <th className="py-3 px-4">Monitor(es)</th>
                 {showProfitability && <th className="py-3 px-4">Importe Mensual</th>}
                 <th className="py-3 px-4">Estado</th>
                 <th className="py-3 px-4 text-right">Acciones</th>
@@ -995,6 +1322,7 @@ export const MonthlyBillingTable = () => {
               {filteredRows.map(({ student, tariff, status, price, registry }) => {
                 const isBaja = status === 'baja_temporal';
                 const isPrueba = student.status === 'pendiente_aprobacion';
+                const studentCoaches = coachesByStudentId[student.id] || [];
 
                 return (
                   <tr
@@ -1045,6 +1373,33 @@ export const MonthlyBillingTable = () => {
                         </span>
                       ) : (
                         <span className="text-slate-400 italic">Estándar</span>
+                      )}
+                    </td>
+
+                    {/* Monitor(es) */}
+                    <td className="py-3 px-4">
+                      {studentCoaches.length > 0 ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {studentCoaches.map((c) => (
+                            <span
+                              key={c.id}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border"
+                              style={{
+                                backgroundColor: c.color_theme ? `${c.color_theme}15` : '#f1f5f9',
+                                borderColor: c.color_theme ? `${c.color_theme}40` : '#cbd5e1',
+                                color: c.color_theme || '#475569',
+                              }}
+                            >
+                              <span
+                                className="w-1.5 h-1.5 rounded-full shrink-0"
+                                style={{ backgroundColor: c.color_theme || '#64748b' }}
+                              />
+                              <span>{c.name}</span>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 italic text-[11px]">Sin monitor</span>
                       )}
                     </td>
 
@@ -1135,7 +1490,7 @@ export const MonthlyBillingTable = () => {
 
               {filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="py-12 text-center text-slate-400">
+                  <td colSpan={showProfitability ? 8 : 7} className="py-12 text-center text-slate-400">
                     No se encontraron alumnos para los filtros aplicados.
                   </td>
                 </tr>
@@ -1149,21 +1504,6 @@ export const MonthlyBillingTable = () => {
       <MonthlyClosuresHistory
         isOpen={showHistory}
         onClose={() => setShowHistory(false)}
-      />
-
-      {/* Modal Cierre Mensual */}
-      <CloseMonthModal
-        isOpen={closeModalOpen}
-        onClose={() => setCloseModalOpen(false)}
-        monthYear={selectedMonth}
-        formattedMonth={formattedMonth}
-        coachesBreakdown={coachesBreakdown}
-        totalRecaudado={totalRecaudado}
-        totalCosteMonitores={totalCosteMonitores}
-        totalBeneficioEscuela={totalBeneficioEscuela}
-        isAlreadyClosed={isClosed}
-        hasPendingChanges={hasPendingChanges}
-        onConfirmClose={handleConfirmCloseMonth}
       />
 
       {/* Modal Rápido Sueldo Monitor */}
@@ -1180,11 +1520,19 @@ export const MonthlyBillingTable = () => {
         onClose={() => setStudentToEdit(null)}
         studentToEdit={studentToEdit}
         onSave={async (studentData) => {
-          if (studentToEdit?.id) {
-            const updated = await updateStudent(studentToEdit.id, studentData);
-            setStudentToEdit(null);
-            return updated;
-          }
+          return new Promise((resolve, reject) => {
+            checkClosedMonthAction(async () => {
+              try {
+                if (studentToEdit?.id) {
+                  const updated = await updateStudent(studentToEdit.id, studentData);
+                  setStudentToEdit(null);
+                  resolve(updated);
+                }
+              } catch (err) {
+                reject(err);
+              }
+            }, 'editar este alumno');
+          });
         }}
         onDelete={(st) => setStudentToDelete(st)}
       />

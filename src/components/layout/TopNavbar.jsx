@@ -14,9 +14,12 @@ import {
   CheckCircle2,
   Lock,
   TrendingUp,
+  AlertCircle,
 } from 'lucide-react';
 import { format, parse, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { CloseMonthModal } from '../billing/CloseMonthModal';
+import { useMonthlyCalculations } from '../../hooks/useMonthlyCalculations';
 
 export const TopNavbar = () => {
   const { user, signOut } = useAuth();
@@ -31,8 +34,22 @@ export const TopNavbar = () => {
     toggleProfitability,
     seedSchoolData,
     isSeeding,
+    isCurrentMonthClosed,
   } = useSchool();
 
+  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
+
+  const {
+    formattedMonth,
+    coachesBreakdown,
+    totalRecaudado,
+    totalCosteMonitores,
+    totalBeneficioEscuela,
+    isClosed,
+    hasPendingChanges,
+    isCurrentMonthUnlocked,
+    handleCloseMonth,
+  } = useMonthlyCalculations(selectedMonth);
 
   const [seedSuccess, setSeedSuccess] = useState(false);
 
@@ -168,8 +185,11 @@ export const TopNavbar = () => {
             >
               <ChevronLeft className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
             </button>
-            <span className="px-1.5 sm:px-2.5 text-[11px] sm:text-xs font-bold text-slate-800 capitalize min-w-[84px] sm:min-w-[110px] text-center select-none truncate">
-              {formattedMonthLabel}
+            <span className="px-1.5 sm:px-2.5 text-[11px] sm:text-xs font-bold text-slate-800 capitalize min-w-[84px] sm:min-w-[110px] text-center select-none truncate inline-flex items-center justify-center gap-1">
+              <span>{formattedMonthLabel}</span>
+              {isCurrentMonthClosed && (
+                <Lock className="w-3 h-3 text-amber-600 shrink-0" title="Mes cerrado y bloqueado" />
+              )}
             </span>
             <button
               type="button"
@@ -212,6 +232,43 @@ export const TopNavbar = () => {
               </>
             )}
           </button>
+
+          {/* Botón Cerrar Mes (A la derecha de Vista Rentabilidad, utilizable sin contraseña) */}
+          <button
+            type="button"
+            onClick={() => setIsCloseModalOpen(true)}
+            className={`hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer border ${
+              !isClosed
+                ? 'bg-[#0055A5] text-white border-[#0055A5] hover:bg-[#004282]'
+                : hasPendingChanges || isCurrentMonthUnlocked
+                ? 'bg-slate-900 text-amber-300 border-amber-400 hover:bg-slate-800 shadow-amber-500/10'
+                : 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800'
+            }`}
+            title={
+              !isClosed
+                ? 'Cerrar mes y congelar beneficios en el histórico (sin contraseña)'
+                : hasPendingChanges || isCurrentMonthUnlocked
+                ? 'El mes está en modificación o tiene cambios pendientes. Haz clic para volver a cerrar y congelar.'
+                : 'Mes cerrado y congelado en el histórico. Haz clic para revisar o actualizar.'
+            }
+          >
+            {!isClosed ? (
+              <>
+                <Lock className="w-3.5 h-3.5" />
+                <span>Cerrar Mes</span>
+              </>
+            ) : hasPendingChanges || isCurrentMonthUnlocked ? (
+              <>
+                <AlertCircle className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                <span>Mes Cerrado (Actualizar)</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Mes Cerrado</span>
+              </>
+            )}
+          </button>
         </div>
 
         {/* Right: Seed Button & User / Logout (Desktop md+) */}
@@ -250,6 +307,21 @@ export const TopNavbar = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal Cerrar Mes (Usable directamente sin contraseña) */}
+      <CloseMonthModal
+        isOpen={isCloseModalOpen}
+        onClose={() => setIsCloseModalOpen(false)}
+        monthYear={selectedMonth}
+        formattedMonth={formattedMonth}
+        coachesBreakdown={coachesBreakdown}
+        totalRecaudado={totalRecaudado}
+        totalCosteMonitores={totalCosteMonitores}
+        totalBeneficioEscuela={totalBeneficioEscuela}
+        isAlreadyClosed={isClosed}
+        hasPendingChanges={hasPendingChanges || isCurrentMonthUnlocked}
+        onConfirmClose={handleCloseMonth}
+      />
     </header>
   );
 };

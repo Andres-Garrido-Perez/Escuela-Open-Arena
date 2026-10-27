@@ -12,7 +12,7 @@ export const StudentCard = ({
   onEdit,
   onDelete,
 }) => {
-  const { selectedMonth } = useSchool();
+  const { selectedMonth, checkClosedMonthAction } = useSchool();
   const { isStudentBaja, toggleBajaTemporal, getStudentRegistry } = useMonthlyRegistry();
 
   const registry = getStudentRegistry(student.id);
@@ -149,7 +149,12 @@ export const StudentCard = ({
         </span>
         <button
           type="button"
-          onClick={() => toggleBajaTemporal(student.id)}
+          onClick={() =>
+            checkClosedMonthAction(
+              () => toggleBajaTemporal(student.id),
+              isBaja ? 'reactivar al alumno' : 'dar de baja temporal al alumno'
+            )
+          }
           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-[10px] transition-colors cursor-pointer ${
             isBaja
               ? 'bg-amber-100 text-amber-900 hover:bg-amber-200'

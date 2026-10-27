@@ -132,11 +132,67 @@ export const useMonthlyClosures = () => {
 
       if (upsertErr) throw upsertErr;
 
+      // Congelar también el estado de todos los alumnos en monthly_registry para este monthYear
+      const { data: currentStudents } = await supabase
+        .from('students')
+        .select('id')
+        .eq('admin_id', adminId);
+
+      const { data: monthRegistryEntries } = await supabase
+        .from('monthly_registry')
+        .select('student_id')
+        .eq('admin_id', adminId)
+        .eq('month_year', monthYear);
+
+      const existingStudentIds = new Set((monthRegistryEntries || []).map((e) => e.student_id));
+      const missingRegistryRows = (currentStudents || [])
+        .filter((s) => !existingStudentIds.has(s.id))
+        .map((s) => ({
+          admin_id: adminId,
+          student_id: s.id,
+          month_year: monthYear,
+          status: 'pagado',
+        }));
+
+      if (missingRegistryRows.length > 0) {
+        await supabase
+          .from('monthly_registry')
+          .insert(missingRegistryRows);
+      }
+
       await fetchClosures();
       if (triggerRefresh) triggerRefresh();
       return data;
     } catch (err) {
       console.error('Error closing month:', err);
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Reabrir mes (elimina el cierre congelado de monthly_closures)
+  const reopenMonth = async (monthYear) => {
+    if (!adminId) throw new Error('Usuario no autenticado');
+    if (!monthYear) throw new Error('Mes no especificado');
+
+    try {
+      setLoading(true);
+      setError(null);
+      const { error: delErr } = await supabase
+        .from('monthly_closures')
+        .delete()
+        .eq('admin_id', adminId)
+        .eq('month_year', monthYear);
+
+      if (delErr) throw delErr;
+
+      await fetchClosures();
+      if (triggerRefresh) triggerRefresh();
+      return true;
+    } catch (err) {
+      console.error('Error reopening month:', err);
       setError(err.message);
       throw err;
     } finally {
@@ -151,6 +207,7 @@ export const useMonthlyClosures = () => {
     isMonthClosed,
     getClosuresForMonth,
     closeMonth,
+    reopenMonth,
     refreshClosures: fetchClosures,
   };
 };

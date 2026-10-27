@@ -25,7 +25,9 @@ import { ClassSlotCard } from './ClassSlotCard';
 import { ClassSlotModal } from './ClassSlotModal';
 import { Button } from '../ui/Button';
 import { Switch } from '../ui/Switch';
-import { Plus, Calendar, Users } from 'lucide-react';
+import { Plus, Calendar, Users, Lock, AlertCircle } from 'lucide-react';
+import { format, parse } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const ALL_DAYS = [
   { day: 1, name: 'Lunes', short: 'LUN' },
@@ -69,7 +71,20 @@ export const WeeklyGrid = () => {
     isReorganizing,
     setIsReorganizing,
     sport,
+    selectedMonth,
+    isCurrentMonthClosed,
+    isCurrentMonthUnlocked,
+    checkClosedMonthAction,
   } = useSchool();
+
+  const formattedMonthLabel = (() => {
+    try {
+      const parsed = parse(selectedMonth, 'yyyy-MM', new Date(2026, 0, 1));
+      return format(parsed, 'MMMM yyyy', { locale: es });
+    } catch {
+      return selectedMonth;
+    }
+  })();
 
   const {
     slots,
@@ -226,8 +241,14 @@ export const WeeklyGrid = () => {
       }
     }
 
-    // Calcular y guardar los nuevos horarios y días en la base de datos
-    await commitDaySlotPositions(updatedMap, activeContainer, overContainer);
+    // Wrap with checkClosedMonthAction!
+    checkClosedMonthAction(
+      async () => {
+        // Calcular y guardar los nuevos horarios y días en la base de datos
+        await commitDaySlotPositions(updatedMap, activeContainer, overContainer);
+      },
+      'mover una clase de horario o día'
+    );
   };
 
   // Calcula las nuevas horas e intercambia/desplaza los horarios en vivo
@@ -297,23 +318,29 @@ export const WeeklyGrid = () => {
   };
 
   const handleOpenCreate = (day) => {
-    setSlotToEdit(null);
-    setTargetDay(day || mobileDay || 1);
-    setModalOpen(true);
+    checkClosedMonthAction(() => {
+      setSlotToEdit(null);
+      setTargetDay(day || mobileDay || 1);
+      setModalOpen(true);
+    }, 'crear una nueva clase');
   };
 
   const handleOpenEdit = (slot) => {
-    setSlotToEdit(slot);
-    setTargetDay(Number(slot.day_of_week) || 1);
-    setModalOpen(true);
+    checkClosedMonthAction(() => {
+      setSlotToEdit(slot);
+      setTargetDay(Number(slot.day_of_week) || 1);
+      setModalOpen(true);
+    }, 'editar los datos de la clase');
   };
 
   const handleSaveSlot = async (slotData) => {
-    if (slotToEdit) {
-      await updateClassSlot(slotToEdit.id, slotData);
-    } else {
-      await addClassSlot(slotData);
-    }
+    checkClosedMonthAction(async () => {
+      if (slotToEdit) {
+        await updateClassSlot(slotToEdit.id, slotData);
+      } else {
+        await addClassSlot(slotData);
+      }
+    }, slotToEdit ? 'actualizar la clase' : 'crear la clase');
   };
 
   const handleCreateAndEnroll = async ({
@@ -321,18 +348,38 @@ export const WeeklyGrid = () => {
     fullName,
     alsoAddPairDay,
   }) => {
-    const createdStudent = await addStudent({
-      full_name: fullName,
-      sport: sport,
-    });
-
-    if (createdStudent?.id) {
-      await enrollStudent({
-        classSlotId,
-        studentId: createdStudent.id,
-        alsoAddPairDay,
+    checkClosedMonthAction(async () => {
+      const createdStudent = await addStudent({
+        full_name: fullName,
+        sport: sport,
       });
-    }
+
+      if (createdStudent?.id) {
+        await enrollStudent({
+          classSlotId,
+          studentId: createdStudent.id,
+          alsoAddPairDay,
+        });
+      }
+    }, 'inscribir alumno en la clase');
+  };
+
+  const handleProtectedEnroll = (params) => {
+    checkClosedMonthAction(async () => {
+      await enrollStudent(params);
+    }, 'inscribir alumno en la clase');
+  };
+
+  const handleProtectedUnenroll = (classSlotId, studentId) => {
+    checkClosedMonthAction(async () => {
+      await unenrollStudent(classSlotId, studentId);
+    }, 'desinscribir alumno de la clase');
+  };
+
+  const handleProtectedDeleteSlot = (slotId) => {
+    checkClosedMonthAction(async () => {
+      await deleteClassSlot(slotId);
+    }, 'eliminar esta clase');
   };
 
   const activeSlot = activeSlotId ? slots.find((s) => s.id === activeSlotId) : null;
@@ -348,6 +395,41 @@ export const WeeklyGrid = () => {
       onDragEnd={handleDragEnd}
     >
       <div className="flex-1 flex flex-col min-h-0 bg-slate-100/50">
+        {/* Banner de Mes Cerrado / Bloqueado */}
+        {isCurrentMonthClosed && (
+          <div
+            className={`border-b px-3 sm:px-4 py-2 flex items-center justify-between text-xs shrink-0 ${
+              isCurrentMonthUnlocked
+                ? 'bg-amber-500/15 border-amber-400 text-amber-950'
+                : 'bg-amber-500/10 border-amber-300 text-amber-950'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {isCurrentMonthUnlocked ? (
+                <>
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 animate-pulse" />
+                  <span className="font-semibold text-[11px] sm:text-xs">
+                    <strong className="font-black text-amber-900">
+                      Mes en Modificación ({formattedMonthLabel}):
+                    </strong>{' '}
+                    Has desbloqueado este mes para realizar cambios. No se te volverá a pedir confirmación en cada acción. Cuando finalices, haz clic en el botón superior <strong>"Mes Cerrado (Actualizar)"</strong> para volver a congelar el histórico.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span className="font-semibold text-[11px] sm:text-xs">
+                    <strong className="font-black text-amber-900">
+                      Mes Cerrado ({formattedMonthLabel}):
+                    </strong>{' '}
+                    Este mes está cerrado para proteger el histórico de rentabilidad. Si intentas mover o cambiar clases, se te preguntará si deseas desbloquearlo para modificarlo.
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Subheader Toolbar */}
         <div className="bg-white border-b border-slate-200/80 px-3 sm:px-4 py-2 sm:py-2.5 flex flex-wrap items-center justify-between gap-2 sm:gap-4 shrink-0">
           <div className="flex items-center gap-2 sm:gap-3">
@@ -529,11 +611,11 @@ export const WeeklyGrid = () => {
                     isReorganizing={isReorganizing}
                     enrollments={enrollmentsBySlotId[slot.id] || []}
                     allStudents={filteredStudents}
-                    onEnrollExisting={enrollStudent}
+                    onEnrollExisting={handleProtectedEnroll}
                     onCreateAndEnroll={handleCreateAndEnroll}
-                    onUnenroll={unenrollStudent}
+                    onUnenroll={handleProtectedUnenroll}
                     onEditSlot={handleOpenEdit}
-                    onDeleteSlot={deleteClassSlot}
+                    onDeleteSlot={handleProtectedDeleteSlot}
                   />
                 ))}
 
@@ -624,10 +706,10 @@ export const WeeklyGrid = () => {
                     filteredStudents={filteredStudents}
                     handleOpenCreate={handleOpenCreate}
                     handleOpenEdit={handleOpenEdit}
-                    deleteClassSlot={deleteClassSlot}
-                    enrollStudent={enrollStudent}
+                    deleteClassSlot={handleProtectedDeleteSlot}
+                    enrollStudent={handleProtectedEnroll}
                     handleCreateAndEnroll={handleCreateAndEnroll}
-                    unenrollStudent={unenrollStudent}
+                    unenrollStudent={handleProtectedUnenroll}
                   />
                 ))}
               </div>

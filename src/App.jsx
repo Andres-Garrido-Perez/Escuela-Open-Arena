@@ -8,10 +8,22 @@ import { SportSelectorView } from './components/sport-selector/SportSelectorView
 
 import { BottomNavBar } from './components/layout/BottomNavBar';
 import { ProfitabilityPasswordModal } from './components/profitability/ProfitabilityPasswordModal';
+import { ClosedMonthConfirmModal } from './components/ui/ClosedMonthConfirmModal';
+import { parse, format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const AppContent = () => {
   const { session, loading } = useAuth();
-  const { sport, setSport } = useSchool();
+  const { sport, setSport, closedMonthModal, closeClosedMonthModal, selectedMonth } = useSchool();
+
+  const formattedMonthLabel = (() => {
+    try {
+      const parsed = parse(selectedMonth, 'yyyy-MM', new Date(2026, 0, 1));
+      return format(parsed, 'MMMM yyyy', { locale: es });
+    } catch {
+      return selectedMonth;
+    }
+  })();
 
   // Loading state
   if (loading) {
@@ -44,6 +56,13 @@ const AppContent = () => {
       <MainWorkspace />
       <BottomNavBar />
       <ProfitabilityPasswordModal />
+      <ClosedMonthConfirmModal
+        isOpen={Boolean(closedMonthModal?.isOpen)}
+        onClose={closeClosedMonthModal}
+        onConfirm={closedMonthModal?.onConfirm}
+        monthLabel={formattedMonthLabel}
+        actionName={closedMonthModal?.actionName || 'modificar este mes'}
+      />
     </div>
   );
 };

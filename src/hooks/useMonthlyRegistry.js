@@ -5,7 +5,7 @@ import { useSchool } from '../context/SchoolContext';
 
 export const useMonthlyRegistry = () => {
   const { adminId } = useAuth();
-  const { selectedMonth, refreshKey, triggerRefresh } = useSchool();
+  const { selectedMonth, refreshKey, triggerRefresh, isMonthClosed } = useSchool();
   const [allEntries, setAllEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -148,14 +148,14 @@ export const useMonthlyRegistry = () => {
           notes,
         };
 
-    // Actualización optimista: actualizar mes actual y propagar hacia meses futuros en memoria
+    // Actualización optimista: actualizar mes actual y propagar hacia meses futuros NO CERRADOS en memoria
     setAllEntries((prev) => {
       let updated = prev.map((e) => {
         if (e.student_id === studentId) {
           if (e.month_year === selectedMonth) {
             return optimisticCurrent;
           }
-          if (e.month_year > selectedMonth) {
+          if (e.month_year > selectedMonth && !isMonthClosed?.(e.month_year)) {
             return { ...e, status };
           }
         }
@@ -198,13 +198,24 @@ export const useMonthlyRegistry = () => {
       }
 
       // 2. Propagación hacia adelante: actualizar registros existentes de meses futuros
-      // para que adopten el nuevo estado (baja o activo)
-      await supabase
+      // que NO estén cerrados (protección inmutable de meses cerrados)
+      const { data: futureEntries } = await supabase
         .from('monthly_registry')
-        .update({ status })
+        .select('id, month_year')
         .eq('admin_id', adminId)
         .eq('student_id', studentId)
         .gt('month_year', selectedMonth);
+
+      const unclosedFutureIds = (futureEntries || [])
+        .filter((entry) => !isMonthClosed?.(entry.month_year))
+        .map((entry) => entry.id);
+
+      if (unclosedFutureIds.length > 0) {
+        await supabase
+          .from('monthly_registry')
+          .update({ status })
+          .in('id', unclosedFutureIds);
+      }
 
       await fetchMonthlyRegistry();
       if (triggerRefresh) triggerRefresh();
