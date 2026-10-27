@@ -132,32 +132,17 @@ export const useMonthlyClosures = () => {
 
       if (upsertErr) throw upsertErr;
 
-      // Congelar también el estado de todos los alumnos en monthly_registry para este monthYear
-      const { data: currentStudents } = await supabase
-        .from('students')
-        .select('id')
-        .eq('admin_id', adminId);
-
-      const { data: monthRegistryEntries } = await supabase
-        .from('monthly_registry')
-        .select('student_id')
-        .eq('admin_id', adminId)
-        .eq('month_year', monthYear);
-
-      const existingStudentIds = new Set((monthRegistryEntries || []).map((e) => e.student_id));
-      const missingRegistryRows = (currentStudents || [])
-        .filter((s) => !existingStudentIds.has(s.id))
-        .map((s) => ({
-          admin_id: adminId,
-          student_id: s.id,
-          month_year: monthYear,
-          status: 'pagado',
-        }));
-
-      if (missingRegistryRows.length > 0) {
+      // Limpiar posibles entradas vacías/redundantes de monthly_registry de este mes para evitar corrupción de importes
+      try {
         await supabase
           .from('monthly_registry')
-          .insert(missingRegistryRows);
+          .delete()
+          .eq('admin_id', adminId)
+          .eq('month_year', monthYear)
+          .eq('status', 'pagado')
+          .or('amount_expected.is.null,amount_expected.eq.0');
+      } catch (cleanErr) {
+        console.warn('Advertencia limpiando registry de mes cerrado:', cleanErr);
       }
 
       await fetchClosures();

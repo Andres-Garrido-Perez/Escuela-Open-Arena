@@ -114,7 +114,8 @@ export const MonthlyBillingTable = () => {
         let price = 0;
         if (
           registry?.amount_expected !== null &&
-          registry?.amount_expected !== undefined
+          registry?.amount_expected !== undefined &&
+          Number(registry.amount_expected) > 0
         ) {
           price = Number(registry.amount_expected);
         } else if (tariff) {
