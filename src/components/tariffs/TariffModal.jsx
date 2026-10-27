@@ -9,16 +9,14 @@ const COMMON_CATEGORIES = {
     { cat: 'Pre-Tenis (4-6 años)', level: 'Pre-Tenis', max: 8, prefix: 'PT' },
     { cat: 'Iniciación y Avanzada (6-18 años)', level: 'Iniciación y Avanzada', max: 8, prefix: 'INI-AV' },
     { cat: 'Promoción (8-18 años)', level: 'Promoción', max: 6, prefix: 'PR' },
-    { cat: 'Adultos (+18 años) - G6', level: 'Adultos (Grupos de 6)', max: 6, prefix: 'AD-G6' },
-    { cat: 'Adultos (+18 años) - G4', level: 'Adultos (Grupos de 4)', max: 4, prefix: 'AD-G4' },
-    { cat: 'Competición Tenis', level: 'Competición', max: 4, prefix: 'COMP' },
+    { cat: 'Adultos (4)', level: 'Adultos (4)', max: 4, prefix: 'AD-1h(4)' },
+    { cat: 'Adultos (6)', level: 'Adultos (6)', max: 6, prefix: 'AD-1h(6)' },
+    { cat: 'Competición', level: 'Competición', max: 4, prefix: 'C' },
   ],
   padel: [
-    { cat: 'Iniciación Pádel', level: 'Iniciación', max: 4, prefix: 'PAD-INI' },
-    { cat: 'Intermedio Pádel', level: 'Intermedio', max: 4, prefix: 'PAD-INT' },
-    { cat: 'Avanzado Pádel', level: 'Avanzado', max: 4, prefix: 'PAD-AV' },
-    { cat: 'Menores Pádel (6-16 años)', level: 'Menores', max: 4, prefix: 'PAD-MEN' },
-    { cat: 'Competición Pádel', level: 'Competición', max: 4, prefix: 'PAD-COMP' },
+    { cat: 'Pádel', level: 'Pádel', max: 4, prefix: 'P4-1' },
+    { cat: 'Pre-Pádel (4-6 años)', level: 'Pre-Pádel', max: 6, prefix: 'P6-1' },
+    { cat: 'Pádel Juvenil (16:00-19:00)', level: 'Pádel Juvenil', max: 6, prefix: 'P4-1 VALLE' },
   ],
 };
 

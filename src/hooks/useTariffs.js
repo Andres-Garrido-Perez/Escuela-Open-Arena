@@ -7,13 +7,104 @@ import { sanitizeTariffCode } from '../utils/tariffUtils';
 
 const getStorageKey = (adminId) => `openarena_tariffs_${adminId || 'global'}`;
 
+/**
+ * Normaliza nombres, elimina clases no deseadas (como particulares) y previene duplicados.
+ */
+export function cleanAndDeduplicateTariffs(list = []) {
+  if (!Array.isArray(list)) return [];
+
+  // 1. Filtrar clases particulares (no forman parte de las escuelas)
+  const nonParticular = list.filter((t) => {
+    if (!t) return false;
+    const cat = (t.category_name || '').toLowerCase();
+    const code = (t.code || '').toLowerCase();
+    const lvl = (t.level_label || '').toLowerCase();
+    return (
+      !cat.includes('particular') &&
+      !code.includes('part') &&
+      !lvl.includes('particular')
+    );
+  });
+
+  // 2. Normalizar nombres a los oficiales de la hoja
+  const normalized = nonParticular.map((t) => {
+    let cat = (t.category_name || '').trim();
+    let lvl = (t.level_label || '').trim();
+    let code = (t.code || '').trim();
+    let max = Number(t.max_students) || 4;
+
+    // Normalizar Adultos 4
+    if (
+      cat.includes('G4') ||
+      cat.includes('Adultos (+18 años) - G4') ||
+      lvl.includes('Grupos de 4') ||
+      (cat.toLowerCase().includes('adult') && (cat.includes('(4)') || max === 4))
+    ) {
+      cat = 'Adultos (4)';
+      lvl = 'Adultos (4)';
+      max = 4;
+      code = code.replace(/G4/i, '4');
+    }
+
+    // Normalizar Adultos 6
+    if (
+      cat.includes('G6') ||
+      cat.includes('Adultos (+18 años) - G6') ||
+      lvl.includes('Grupos de 6') ||
+      (cat.toLowerCase().includes('adult') && (cat.includes('(6)') || max === 6))
+    ) {
+      cat = 'Adultos (6)';
+      lvl = 'Adultos (6)';
+      max = 6;
+      code = code.replace(/G6/i, '6');
+    }
+
+    // Normalizar Competición
+    if (cat.startsWith('Competición (')) {
+      cat = 'Competición';
+      lvl = 'Competición';
+    }
+
+    return {
+      ...t,
+      category_name: cat,
+      level_label: lvl || cat,
+      code,
+      max_students: max,
+    };
+  });
+
+  // 3. Deduplicar estrictamente por deporte + código y deporte + categoría + horas
+  const seenKeys = new Set();
+  const deduped = [];
+
+  for (const item of normalized) {
+    const sp = (item.sport || 'tenis').toLowerCase();
+    const cd = (item.code || '').toLowerCase();
+    const cat = (item.category_name || '').toLowerCase();
+    const h = Number(item.hours_per_week) || 1;
+
+    const key1 = `${sp}_code_${cd}`;
+    const key2 = `${sp}_cat_${cat}_${h}`;
+
+    if (cd && seenKeys.has(key1)) continue;
+    if (seenKeys.has(key2)) continue;
+
+    if (cd) seenKeys.add(key1);
+    seenKeys.add(key2);
+    deduped.push(sanitizeTariffCode(item));
+  }
+
+  return deduped;
+}
+
 // Cargar tarifas guardadas localmente como respaldo
 const loadLocalTariffs = (adminId) => {
   try {
     const raw = localStorage.getItem(getStorageKey(adminId));
     if (raw) {
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed.map(sanitizeTariffCode) : null;
+      return Array.isArray(parsed) ? cleanAndDeduplicateTariffs(parsed) : null;
     }
   } catch (e) {
     console.warn('Error leyendo tarifas locales:', e);
@@ -24,7 +115,8 @@ const loadLocalTariffs = (adminId) => {
 // Guardar tarifas en localStorage
 const saveLocalTariffs = (adminId, list) => {
   try {
-    localStorage.setItem(getStorageKey(adminId), JSON.stringify(list));
+    const cleanList = cleanAndDeduplicateTariffs(list);
+    localStorage.setItem(getStorageKey(adminId), JSON.stringify(cleanList));
   } catch (e) {
     console.warn('Error guardando tarifas locales:', e);
   }
@@ -47,7 +139,7 @@ export const useTariffs = () => {
 
   const fetchTariffs = useCallback(async () => {
     if (!adminId) {
-      const local = loadLocalTariffs('global') || OFFICIAL_OPENARENA_TARIFFS;
+      const local = loadLocalTariffs('global') || cleanAndDeduplicateTariffs(OFFICIAL_OPENARENA_TARIFFS);
       setTariffs(local);
       setLoading(false);
       return;
@@ -66,71 +158,30 @@ export const useTariffs = () => {
       if (err) throw err;
 
       if (data && data.length > 0) {
-        // Enriquecer cada fila con level_label si no viene de base de datos
         const enrichedFromDb = data.map((t) => ({
           ...t,
           level_label: t.level_label || t.category_name || t.code,
         }));
 
-        // Combinar con cualquier tarifa creada localmente que aún no esté en DB
-        const localItems = loadLocalTariffs(adminId) || [];
-        const dbIds = new Set(enrichedFromDb.map((t) => String(t.id)));
-        const dbCodes = new Set(enrichedFromDb.map((t) => `${t.sport}_${t.code}`.toLowerCase()));
-
-        const pendingLocal = localItems.filter(
-          (lt) => !dbIds.has(String(lt.id)) && !dbCodes.has(`${lt.sport}_${lt.code}`.toLowerCase())
-        );
-
-        const merged = [...enrichedFromDb, ...pendingLocal].map(sanitizeTariffCode);
-        setTariffs(merged);
-        saveLocalTariffs(adminId, merged);
+        const cleaned = cleanAndDeduplicateTariffs(enrichedFromDb);
+        setTariffs(cleaned);
+        saveLocalTariffs(adminId, cleaned);
       } else {
-        // Si aún no se han insertado en Supabase, auto-poblamos con las tarifas oficiales (quitando level_label que no es columna de tabla)
-        try {
-          const toInsert = OFFICIAL_OPENARENA_TARIFFS.map(({ level_label, ...rest }) => ({
-            ...rest,
-            admin_id: adminId,
-          }));
-
-          const { data: inserted, error: insErr } = await supabase
-            .from('tariffs')
-            .insert(toInsert)
-            .select();
-
-          if (!insErr && inserted?.length > 0) {
-            const enriched = inserted.map((t) => ({
-              ...t,
-              level_label: t.category_name,
-            }));
-            setTariffs(enriched);
-            saveLocalTariffs(adminId, enriched);
-          } else {
-            const fallback = OFFICIAL_OPENARENA_TARIFFS.map((t, i) => ({
-              ...t,
-              id: `tariff-${t.code.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${i}`,
-              admin_id: adminId,
-            }));
-            setTariffs(fallback);
-            saveLocalTariffs(adminId, fallback);
-          }
-        } catch {
-          const fallback = OFFICIAL_OPENARENA_TARIFFS.map((t, i) => ({
-            ...t,
-            id: `tariff-${t.code.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${i}`,
-            admin_id: adminId,
-          }));
-          setTariffs(fallback);
-          saveLocalTariffs(adminId, fallback);
-        }
+        const fallback = cleanAndDeduplicateTariffs(OFFICIAL_OPENARENA_TARIFFS).map((t, i) => ({
+          ...t,
+          id: `tariff-${t.code.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${i}`,
+          admin_id: adminId,
+        }));
+        setTariffs(fallback);
+        saveLocalTariffs(adminId, fallback);
       }
     } catch (err) {
       console.error('Error fetching tariffs:', err);
-      // Usar respaldo local o tarifas oficiales
       const local = loadLocalTariffs(adminId);
       if (local && local.length > 0) {
         setTariffs(local);
       } else {
-        const fallback = OFFICIAL_OPENARENA_TARIFFS.map((t, i) => ({
+        const fallback = cleanAndDeduplicateTariffs(OFFICIAL_OPENARENA_TARIFFS).map((t, i) => ({
           ...t,
           id: `tariff-${t.code.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${i}`,
           admin_id: adminId,
@@ -164,16 +215,14 @@ export const useTariffs = () => {
       id: tempId,
     };
 
-    // Actualización inmediata en estado local y almacenamiento persistente
     setTariffs((prev) => {
-      const next = [...prev, fullTariff];
+      const next = cleanAndDeduplicateTariffs([...prev, fullTariff]);
       saveLocalTariffs(adminId, next);
       return next;
     });
 
     try {
       if (adminId) {
-        // Enviar a Supabase ÚNICAMENTE las columnas existentes en la tabla (sin level_label ni id temporal)
         const dbPayload = {
           admin_id: adminId,
           code: fullTariff.code,
@@ -196,10 +245,9 @@ export const useTariffs = () => {
         if (insErr) {
           console.warn('Aviso Supabase insert tarifa:', insErr);
         } else if (data) {
-          // Reemplazar el id temporal por el id real asignado por Supabase
           const realTariff = { ...fullTariff, ...data, level_label: fullTariff.level_label };
           setTariffs((prev) => {
-            const next = prev.map((t) => (t.id === tempId ? realTariff : t));
+            const next = cleanAndDeduplicateTariffs(prev.map((t) => (t.id === tempId ? realTariff : t)));
             saveLocalTariffs(adminId, next);
             return next;
           });
@@ -213,7 +261,7 @@ export const useTariffs = () => {
     return fullTariff;
   };
 
-  // Actualizar una tarifa existente (precio, nombre, horas, aforo, etc.)
+  // Actualizar una tarifa existente
   const updateTariff = async (id, patch) => {
     const cleanPatch = { ...patch };
     if ('hours_per_week' in cleanPatch) cleanPatch.hours_per_week = Number(cleanPatch.hours_per_week);
@@ -225,15 +273,13 @@ export const useTariffs = () => {
     if (cleanPatch.category_name) cleanPatch.category_name = cleanPatch.category_name.trim();
     if (cleanPatch.level_label) cleanPatch.level_label = cleanPatch.level_label.trim();
 
-    // Actualización inmediata en estado local y almacenamiento persistente
     setTariffs((prev) => {
-      const next = prev.map((t) => (t.id === id ? { ...t, ...cleanPatch } : t));
+      const next = cleanAndDeduplicateTariffs(prev.map((t) => (t.id === id ? { ...t, ...cleanPatch } : t)));
       saveLocalTariffs(adminId, next);
       return next;
     });
 
     try {
-      // Filtrar columnas para la tabla Supabase (sin level_label)
       const { level_label, ...dbPatch } = cleanPatch;
       if (Object.keys(dbPatch).length > 0) {
         const { error: updErr } = await supabase
@@ -254,7 +300,6 @@ export const useTariffs = () => {
 
   // Eliminar una tarifa
   const deleteTariff = async (id) => {
-    // Actualización inmediata en estado local y almacenamiento persistente
     setTariffs((prev) => {
       const next = prev.filter((t) => t.id !== id);
       saveLocalTariffs(adminId, next);

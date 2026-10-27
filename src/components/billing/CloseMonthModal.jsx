@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
-import { Lock, TrendingUp, AlertTriangle, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Lock, AlertTriangle, CheckCircle2, ShieldCheck, Calendar } from 'lucide-react';
 
 export const CloseMonthModal = ({
   isOpen,
@@ -9,9 +9,6 @@ export const CloseMonthModal = ({
   monthYear,
   formattedMonth,
   coachesBreakdown = [],
-  totalRecaudado = 0,
-  totalCosteMonitores = 0,
-  totalBeneficioEscuela = 0,
   isAlreadyClosed = false,
   hasPendingChanges = false,
   onConfirmClose,
@@ -50,9 +47,9 @@ export const CloseMonthModal = ({
       }
       subtitle={
         !isAlreadyClosed
-          ? `Congelar beneficios para ${formattedMonth} (${monthYear})`
+          ? `Confirmar el cierre oficial para ${formattedMonth} (${monthYear})`
           : hasPendingChanges
-          ? `Se detectaron cambios en ${formattedMonth}. Pulsa para actualizar el histórico congelado.`
+          ? `Se detectaron cambios en ${formattedMonth}. Pulsa para actualizar el histórico guardado.`
           : `El histórico de ${formattedMonth} está al día con los datos actuales.`
       }
       maxWidth="max-w-md"
@@ -74,27 +71,27 @@ export const CloseMonthModal = ({
               ¡Cierre Guardado con Éxito!
             </h3>
             <p className="text-xs text-slate-500">
-              Los beneficios de {formattedMonth} han quedado congelados en el histórico.
+              El cierre de {formattedMonth} ha quedado registrado con éxito en el histórico.
             </p>
           </div>
         ) : (
           <>
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Recaudación Bruta Alumnos:</span>
-                <span className="font-bold text-slate-800">{totalRecaudado.toFixed(2)} €</span>
+                <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  Mes:
+                </span>
+                <span className="font-bold text-slate-800 capitalize">{formattedMonth}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Nómina Total Monitores:</span>
-                <span className="font-bold text-slate-700">-{totalCosteMonitores.toFixed(2)} €</span>
-              </div>
-              <div className="pt-2 border-t border-slate-200 flex items-center justify-between font-black text-sm">
-                <span className="text-slate-900">Beneficio Neto Escuela:</span>
-                <span
-                  className={totalBeneficioEscuela >= 0 ? 'text-emerald-700' : 'text-rose-600'}
-                >
-                  {totalBeneficioEscuela >= 0 ? '+' : ''}
-                  {totalBeneficioEscuela.toFixed(2)} €
+              <div className="flex items-center justify-between border-t border-slate-200/60 pt-2">
+                <span className="text-slate-500 font-medium">Estado del cierre:</span>
+                <span className={`font-bold px-2 py-0.5 rounded-md ${
+                  isAlreadyClosed
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                }`}>
+                  {isAlreadyClosed ? 'Cierre Guardado' : 'Pendiente de Cierre'}
                 </span>
               </div>
             </div>
@@ -105,7 +102,7 @@ export const CloseMonthModal = ({
                 <span>¿Qué ocurre al cerrar el mes?</span>
               </div>
               <p className="m-0 text-amber-800 leading-relaxed">
-                Se guardará una instantánea con el desglose exacto de {coachesBreakdown.length} monitores en la tabla oficial de cierres (<code className="font-bold text-amber-900">monthly_closures</code>). Podrás consultarlo siempre en el Histórico de Beneficios aunque cambien los alumnos o tarifas en el futuro.
+                Se guardará una instantánea del estado de {formattedMonth} en el histórico oficial. Podrás consultarlo siempre en el Histórico aunque cambien los alumnos o cuadrantes en el futuro.
               </p>
             </div>
 
@@ -122,7 +119,7 @@ export const CloseMonthModal = ({
                 className="bg-slate-900 hover:bg-slate-800 text-white"
               >
                 {!isAlreadyClosed
-                  ? 'Confirmar y Congelar'
+                  ? 'Confirmar y Cerrar Mes'
                   : hasPendingChanges
                   ? 'Actualizar Cierre'
                   : 'Volver a Guardar'}

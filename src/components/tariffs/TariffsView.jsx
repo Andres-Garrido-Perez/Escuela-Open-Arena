@@ -16,10 +16,15 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
+import { useSchedule } from '../../hooks/useSchedule';
+import { resolveStudentTariff } from '../../utils/tariffResolver';
+
 export const TariffsView = () => {
   const { sport } = useSchool();
   const { tariffs, addTariff, updateTariff, deleteTariff, loading } = useTariffs();
   const { filteredStudents, students } = useStudents();
+  const { allSlots, slots, enrollments } = useSchedule();
+  const effectiveSlots = allSlots || slots || [];
   const allStudentsList = students || filteredStudents || [];
 
   const [search, setSearch] = useState('');
@@ -31,17 +36,6 @@ export const TariffsView = () => {
 
   const activeSport = (sport || 'tenis').toLowerCase();
   const isTenis = activeSport === 'tenis';
-
-  // Mapear cuántos alumnos tienen asignada cada tarifa
-  const studentCountByTariff = useMemo(() => {
-    const map = {};
-    (allStudentsList || []).forEach((st) => {
-      if (st.tariff_id) {
-        map[st.tariff_id] = (map[st.tariff_id] || 0) + 1;
-      }
-    });
-    return map;
-  }, [allStudentsList]);
 
   // Filtrado de tarifas estrictamente por el deporte activo en el top navbar
   const filteredTariffs = useMemo(() => {
@@ -62,6 +56,38 @@ export const TariffsView = () => {
 
     return list;
   }, [tariffs, activeSport, search]);
+
+  // Mapear cuántos alumnos tienen asignada cada tarifa (resolución completa cuadrante + tarifa + código)
+  const studentCountByTariff = useMemo(() => {
+    const map = {};
+    const relevantStudents = (allStudentsList || []).filter(
+      (st) => !st.sport || st.sport.toLowerCase() === activeSport
+    );
+
+    relevantStudents.forEach((st) => {
+      // 1. Intentar resolver tarifa con el resolver inteligente (cuadrante, nivel, horas, capacidad)
+      const resolved = resolveStudentTariff(st, filteredTariffs, effectiveSlots, enrollments);
+      if (resolved) {
+        if (resolved.id) map[resolved.id] = (map[resolved.id] || 0) + 1;
+        if (resolved.code) map[resolved.code] = (map[resolved.code] || 0) + 1;
+        return;
+      }
+
+      // 2. Si no resuelve pero tiene tariff_id directo
+      if (st.tariff_id) {
+        map[st.tariff_id] = (map[st.tariff_id] || 0) + 1;
+      }
+
+      // 3. Si tiene tariff_code directo
+      if (st.tariff_code) {
+        map[st.tariff_code] = (map[st.tariff_code] || 0) + 1;
+      }
+    });
+
+    return map;
+  }, [allStudentsList, activeSport, filteredTariffs, effectiveSlots, enrollments]);
+
+
 
   // Agrupar tarifas por Categoría
   const groupedByCategory = useMemo(() => {
@@ -255,7 +281,10 @@ export const TariffsView = () => {
                 {/* Grid de Tarjetas de cada Tarifa / Horas */}
                 <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {group.items.map((tariff) => {
-                    const studentCount = studentCountByTariff[tariff.id] || 0;
+                    const studentCount =
+                      studentCountByTariff[tariff.id] ||
+                      (tariff.code && studentCountByTariff[tariff.code]) ||
+                      0;
                     const hours = Number(tariff.hours_per_week) || 1;
 
                     return (
